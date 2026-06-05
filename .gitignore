@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# Local database files
+datbase/
+*.db
+*.sqlite
+
+# Logs and build output
+*.log
+dist/
+build/
