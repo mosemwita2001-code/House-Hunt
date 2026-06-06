@@ -142,7 +142,7 @@ const handleInquirySubmit = async (e) => {
 
           images.map((imgName) => {
 
-            const finalImageUrl = imgName.startsWith('http') ? imgName : `http://localhost:5000/uploads/${imgName}`;
+            const finalImageUrl = imgName.startsWith('http') ? imgName : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}/uploads/${imgName}`;
 
             if (imgErrors[imgName]) return <div key={imgName} className="bg-slate-100 h-72 flex items-center justify-center text-slate-400"><ImageOff size={32} /></div>;
 

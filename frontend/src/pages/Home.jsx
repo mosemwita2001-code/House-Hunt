@@ -30,7 +30,7 @@ export default function Home() {
     if (!image_path) return null;
     const first = image_path.split(',')[0].trim();
     if (!first) return null;
-    return `http://localhost:5000/uploads/${first}`;
+   return first.startsWith('http') ? first : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}/uploads/${first}`;
   };
 
   return (
