@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import API from '/src/api.js';
+import API from '../api.js';
 
 export default function Home() {
   const [properties, setProperties] = useState([]);
