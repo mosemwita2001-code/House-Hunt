@@ -5,48 +5,53 @@ import mysql          from 'mysql2/promise';
 import bcrypt         from 'bcrypt';
 import jwt            from 'jsonwebtoken';
 import multer         from 'multer';
-import path           from 'path';
-import fs             from 'fs';
-import { fileURLToPath } from 'url';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+/* ── Cloudinary config ──────────────────────────────────────────────────── */
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+/* ── Cloudinary multer storage ──────────────────────────────────────────── */
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'house-hunting',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 1200, quality: 'auto' }],
+  },
+});
+
+const upload = multer({ storage });
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
 
 /* ── CORS ───────────────────────────────────────────────────────────────── */
 app.use(cors({
-  origin: ['http://localhost:5173','http://localhost:5174','http://127.0.0.1:5173','http://127.0.0.1:5174'],
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174',
+    process.env.FRONTEND_URL,        // add your frontend URL in env variables
+  ].filter(Boolean),
   credentials: true,
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ── Uploads ────────────────────────────────────────────────────────────── */
-const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-app.use('/uploads', express.static(uploadDir));
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
-});
-
-const upload = multer({ storage: storage });
-
 /* ── DB pool ────────────────────────────────────────────────────────────── */
 const db = mysql.createPool({
-  host:            process.env.DB_HOST     || 'localhost',
-  user:            process.env.DB_USER     || 'root',
-  password:        process.env.DB_PASSWORD || '',
-  database:        process.env.DB_NAME     || 'house_hunting_db',
+  host:               process.env.DB_HOST     || 'localhost',
+  user:               process.env.DB_USER     || 'root',
+  password:           process.env.DB_PASSWORD || '',
+  database:           process.env.DB_NAME     || 'house_hunting_db',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit:    10,
 });
 
 /* test connection on startup */
@@ -136,12 +141,12 @@ app.get('/api/properties', async (req, res) => {
       WHERE p.verification_status = 'approved'
     `;
     const params = [];
-    if (county)    { q += ' AND p.county = ?';     params.push(county); }
-    if (town)      { q += ' AND p.town LIKE ?';     params.push(`%${town}%`); }
-    if (house_type){ q += ' AND p.house_type = ?';  params.push(house_type); }
-    if (bedrooms)  { q += ' AND p.bedrooms = ?';    params.push(bedrooms); }
-    if (minPrice)  { q += ' AND p.price >= ?';      params.push(minPrice); }
-    if (maxPrice)  { q += ' AND p.price <= ?';      params.push(maxPrice); }
+    if (county)     { q += ' AND p.county = ?';     params.push(county); }
+    if (town)       { q += ' AND p.town LIKE ?';     params.push(`%${town}%`); }
+    if (house_type) { q += ' AND p.house_type = ?';  params.push(house_type); }
+    if (bedrooms)   { q += ' AND p.bedrooms = ?';    params.push(bedrooms); }
+    if (minPrice)   { q += ' AND p.price >= ?';      params.push(minPrice); }
+    if (maxPrice)   { q += ' AND p.price <= ?';      params.push(maxPrice); }
     q += sort === 'lowest'  ? ' ORDER BY p.price ASC'
        : sort === 'highest' ? ' ORDER BY p.price DESC'
        : ' ORDER BY p.created_at DESC';
@@ -165,7 +170,7 @@ app.get('/api/properties/:id', async (req, res) => {
     if (!rows.length) return res.status(404).json({ message: 'Property not found' });
     res.json(rows[0]);
   } catch (err) {
-    console.error("Database error:", err);
+    console.error('Database error:', err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -228,8 +233,9 @@ app.post('/api/landlord/properties', protect, authorize('landlord'), upload.arra
     if (!title || !county || !town || !house_type || !price)
       return res.status(400).json({ message: 'title, county, town, house_type and price are required' });
 
+    // Cloudinary returns full URLs in req.files[].path
     const imagePath = req.files?.length
-      ? req.files.map(f => f.filename).join(',')
+      ? req.files.map(f => f.path).join(',')
       : null;
 
     const [result] = await db.execute(
@@ -264,8 +270,9 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord'), upload.a
       payment_cycle, phone_number,
     } = req.body;
 
+    // Cloudinary returns full URLs in req.files[].path
     const imagePath = req.files?.length
-      ? req.files.map(f => f.filename).join(',')
+      ? req.files.map(f => f.path).join(',')
       : null;
 
     const params = [
@@ -335,8 +342,8 @@ app.get('/api/admin/stats', protect, authorize('admin'), async (req, res) => {
       totalUsers, totalHouses, activeListings, pendingListings,
       totalLandlords, suspendedUsers, newUsersThisMonth,
       monthlyRegistrations,
-      approvalRate: approvalRow.rate      || 0,
-      avgRent:      avgRentRow.avg_price  || 0,
+      approvalRate: approvalRow.rate     || 0,
+      avgRent:      avgRentRow.avg_price || 0,
       countyStats,
       roles,
     });
@@ -461,8 +468,6 @@ app.get('/api/favorites', protect, async (req, res) => {
 /* ══════════════════════════════════════════════════════════════════════════
    INQUIRIES
 ══════════════════════════════════════════════════════════════════════════ */
-
-/* POST /api/inquiries — any visitor can send an inquiry (no auth needed) */
 app.post('/api/inquiries', async (req, res) => {
   const { property_id, user_name, user_email, message } = req.body;
   if (!property_id || !user_name || !user_email || !message)
@@ -479,7 +484,6 @@ app.post('/api/inquiries', async (req, res) => {
   }
 });
 
-/* GET /api/landlord/inquiries — landlord sees all inquiries for their properties */
 app.get('/api/landlord/inquiries', protect, authorize('landlord'), async (req, res) => {
   try {
     const [rows] = await db.execute(`
