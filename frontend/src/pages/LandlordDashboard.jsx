@@ -34,7 +34,7 @@ const propertyImage = (p, size = "400x260") => {
   if (p.image_path) {
     // image_path is comma-separated — take only the first filename
     const first = p.image_path.split(',')[0].trim();
-    if (first) return `http://localhost:5000/uploads/${first}`;
+    if (first) return first.startsWith("http") ? first : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${first}`;
   }
   return p.images?.[0]?.image_url || `https://placehold.co/${size}/1a1a2e/444?text=No+Image`;
 };
@@ -48,7 +48,7 @@ const normalizeProperty = (p) => ({
   phoneNumber: p.phone_number || p.phoneNumber || "",
   rentPeriod:  p.payment_cycle || p.rentPeriod || "month",
   images:      p.images || (p.image_path
-    ? p.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ image_url: `http://localhost:5000/uploads/${n}` }))
+    ? p.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` }))
     : []),
 });
 
@@ -214,7 +214,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel }) {
   }));
   const [previews, setPreviews] = useState(() => {
     if (initial?.images?.length) return initial.images.map(i => i.image_url);
-    if (initial?.image_path) return initial.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => `http://localhost:5000/uploads/${n}`);
+    if (initial?.image_path) return initial.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`);
     return [];
   });
   const [newImages, setNewImages] = useState([]);

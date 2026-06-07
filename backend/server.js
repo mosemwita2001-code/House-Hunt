@@ -504,5 +504,12 @@ app.get('/api/landlord/inquiries', protect, authorize('landlord'), async (req, r
 
 /* ── Health check ──────────────────────────────────────────────────────── */
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date() }));
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  if (err.name === 'MulterError') {
+    return res.status(400).json({ message: err.message });
+  }
+  res.status(500).json({ message: 'Internal server error' });
+});
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
