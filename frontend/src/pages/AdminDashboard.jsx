@@ -18,7 +18,7 @@ const normalizeListing = (listing) => ({
   ...listing,
   status: listing.verification_status === "approved" ? "active" : listing.verification_status || listing.status || "pending",
   landlord: listing.landlord || listing.landlord_name || "Landlord",
-  images: listing.images || (listing.image_path ? [{ image_url: `http://localhost:5000/uploads/${listing.image_path}` }] : []),
+  images: listing.images || (listing.image_path ? listing.image_path.split(",").map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` })) : []),
 });
 
 export default function AdminDashboard() {
