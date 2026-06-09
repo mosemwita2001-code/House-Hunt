@@ -121,10 +121,15 @@ export default function Home() {
       {/* ── HERO ── */}
       <div ref={heroRef} style={{
         position: 'relative', overflow: 'hidden',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+backgroundImage: 'url("/1780988434799_WhatsApp_Image_2026-06-09_at_09_59_31.jpeg")',
+backgroundSize: 'cover',
+backgroundPosition: 'center',
         minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '80px 24px 60px',
       }}>
+        {/* Dark overlay */}
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,15,30,0.60)', zIndex: 0 }} />
+
         {/* Decorative circles */}
         <div style={{ position: 'absolute', top: -100, right: -100, width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(234,179,8,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
         <div style={{ position: 'absolute', bottom: -80, left: -80, width: 300, height: 300, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.15) 0%, transparent 70%)', pointerEvents: 'none' }} />
