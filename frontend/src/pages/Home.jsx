@@ -121,7 +121,7 @@ export default function Home() {
       {/* ── HERO ── */}
       <div ref={heroRef} style={{
         position: 'relative', overflow: 'hidden',
-backgroundImage: 'url("/1780988434799_WhatsApp_Image_2026-06-09_at_09_59_31.jpeg")',
+backgroundImage: 'url("/hero.jpg")',
 backgroundSize: 'cover',
 backgroundPosition: 'center',
         minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center',
