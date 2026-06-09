@@ -13,3 +13,5 @@ datbase/
 *.log
 dist/
 build/
+.vercel
+.env*
