@@ -6,6 +6,7 @@ node_modules/
 
 # Local database files
 datbase/
+backend/backup.sql
 *.db
 *.sqlite
 
@@ -15,3 +16,4 @@ dist/
 build/
 .vercel
 .env*
+!backend/.env.example

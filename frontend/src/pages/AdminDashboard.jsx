@@ -12,6 +12,8 @@ import {
   getAllListings,
   updateListingStatus,
   deleteListing,
+  getAllPayments,
+  resolvePayment,
 } from "../services/api";
 
 const normalizeListing = (listing) => ({
@@ -29,6 +31,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [listings, setListings] = useState([]);
+  const [payments, setPayments] = useState([]);
   
   // App States
   const [loading, setLoading] = useState(true);
@@ -45,15 +48,17 @@ export default function AdminDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [statsRes, usersRes, listingsRes] = await Promise.all([
+      const [statsRes, usersRes, listingsRes, paymentsRes] = await Promise.all([
         getDashboardStats(),
         getAllUsers(),
-        getAllListings()
+        getAllListings(),
+        getAllPayments()
       ]);
 
       setStats(statsRes.data);
       setUsers(usersRes.data);
       setListings(listingsRes.data.map(normalizeListing));
+      setPayments(paymentsRes.data || []);
     } catch (err) {
       console.error("Database connection failure:", err);
       setError(err.response?.data?.message || "Failed to establish a secure link with MySQL.");
@@ -172,6 +177,7 @@ export default function AdminDashboard() {
             { id: "dashboard", label: "Dashboard overview", icon: LayoutDashboard },
             { id: "users", label: "User Management", icon: Users },
             { id: "listings", label: "Listing Approvals", icon: Home },
+            { id: "payments", label: "Payments", icon: CheckCircle },
             { id: "statistics", label: "Statistics", icon: BarChart3 },
           ].map(tab => {
             const Icon = tab.icon;
@@ -385,6 +391,14 @@ export default function AdminDashboard() {
           )}
 
           {/* TAB 4: ADVANCED STATISTICS PANEL (TOTAL ZERO-CRASH ARCHITECTURE) */}
+          {activeTab === "payments" && (
+            <div style={{ background: "#111827", borderRadius: 16, padding: 20 }}>
+              <h2 style={{ marginTop: 0 }}>Payments</h2>
+              {payments.map(payment => <div key={payment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.08)" }}><div><div>{payment.type} · KES {Number(payment.amount).toLocaleString()}</div><small style={{ opacity: .6 }}>{payment.property_title || payment.landlord_name || 'Platform'} · {payment.status}</small></div>{payment.status !== 'success' && <button onClick={async () => { await resolvePayment(payment.id); setPayments(ps => ps.map(p => p.id === payment.id ? { ...p, status: 'success' } : p)); }} style={{ background: "#7c3aed", color: "white", border: 0, borderRadius: 8, padding: "7px 10px", cursor: "pointer" }}>Resolve</button>}</div>)}
+              {!payments.length && <p style={{ opacity: .6 }}>No payments recorded.</p>}
+            </div>
+          )}
+
           {activeTab === "statistics" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "28px", width: "100%" }}>
               

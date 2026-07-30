@@ -47,5 +47,7 @@ export const deleteUser = (id) => API.delete(`/admin/users/${id}`);
 export const getAllListings = () => API.get('/admin/listings');
 export const updateListingStatus = (id, status) => API.patch(`/admin/listings/${id}/status`, { status });
 export const deleteListing = (id) => API.delete(`/admin/listings/${id}`);
+export const getAllPayments = () => API.get('/admin/payments');
+export const resolvePayment = (id, confirmation_code) => API.patch(`/admin/payments/${id}/resolve`, { confirmation_code });
 
 export default API;

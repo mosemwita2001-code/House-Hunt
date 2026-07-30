@@ -41,10 +41,8 @@ const propertyImage = (p, size = "400x260") => {
 
 const normalizeProperty = (p) => ({
   ...p,
-  status:
-    p.verification_status === "approved"
-      ? "active"
-      : p.verification_status || p.status || "pending",
+  status: p.status || "available",
+  moderationStatus: p.verification_status || "pending",
   phoneNumber: p.phone_number || p.phoneNumber || "",
   rentPeriod:  p.payment_cycle || p.rentPeriod || "month",
   images:      p.images || (p.image_path
@@ -119,15 +117,15 @@ function StatCard({ label, value, icon, color = "violet", loading }) {
 }
 
 // ─── Property card ────────────────────────────────────────────────────────────
-function PropertyCard({ property, onEdit, onDelete }) {
-  const ss = STATUS_STYLE[property.status] || STATUS_STYLE.pending;
+function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
+  const ss = property.status === "taken" ? STATUS_STYLE.inactive : STATUS_STYLE.active;
   return (
     <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, overflow: "hidden" }}>
       <div style={{ position: "relative", height: 176, background: "rgba(255,255,255,0.03)" }}>
         <img src={propertyImage(property)} alt={property.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.55), transparent)" }} />
         <span style={{ position: "absolute", top: 12, right: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...ss }}>
-          {(property.status || "pending").charAt(0).toUpperCase() + (property.status || "pending").slice(1)}
+          {(property.status || "available").charAt(0).toUpperCase() + (property.status || "available").slice(1)}
         </span>
       </div>
       <div style={{ padding: 16 }}>
@@ -144,6 +142,10 @@ function PropertyCard({ property, onEdit, onDelete }) {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 400</button>}
+          <button onClick={() => onToggle(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: "pointer" }}>
+            Mark {property.status === "taken" ? "Available" : "Taken"}
+          </button>
           <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}>
             <Eye size={12} /> View
           </button>
@@ -200,7 +202,7 @@ function Field({ label, error, children }) {
   );
 }
 
-function PropertyForm({ initial, onSubmit, loading, onCancel }) {
+function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "listing" }) {
   const [form, setForm] = useState(() => ({
     title: "", price: "", deposit: "", county: "", town: "",
     house_type: "", bedrooms: 1, bathrooms: 1, description: "",
@@ -266,7 +268,9 @@ function PropertyForm({ initial, onSubmit, loading, onCancel }) {
     fd.append("description",   form.description);
     fd.append("status",        form.status);
     fd.append("phone_number",  form.phoneNumber);
+    fd.append("mpesa_number",  form.mpesa_number || form.phoneNumber);
     fd.append("payment_cycle", form.rentPeriod);
+    fd.append("payment_option", paymentOption);
     fd.append("amenities",     form.amenities.join(","));
     newImages.forEach(img => fd.append("images", img));
     onSubmit(fd, form);
@@ -365,9 +369,13 @@ function PropertyForm({ initial, onSubmit, loading, onCancel }) {
           </Field>
         </div>
 
-        <Field label="Phone Number *" error={errors.phoneNumber}>
+          <Field label="Phone Number *" error={errors.phoneNumber}>
           <input style={inputStyle} value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="+254712345678" />
+          </Field>
+
+        <Field label="M-Pesa Number (for listing payment)">
+          <input style={inputStyle} value={form.mpesa_number || ""} onChange={e => set("mpesa_number", e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="0712345678" />
         </Field>
 
         <Field label="Rent Period">
@@ -551,7 +559,9 @@ function MyProperties({ addToast, onNavigate }) {
   const handleEditSubmit = async (fd, formValues) => {
     setSaving(true);
     try {
-      await API.put(`/landlord/properties/${editTarget.id}`, fd);
+      const { data } = await API.put(`/landlord/properties/${editTarget.id}`, fd);
+      if (data.payment?.redirect_url) window.location.href = data.payment.redirect_url;
+      else if (data.paymentRequired) throw new Error("Payment provider did not return a checkout link");
       setProperties(prev => prev.map(x =>
         x.id === editTarget.id
           ? normalizeProperty({ ...x, ...formValues, phone_number: formValues.phoneNumber, payment_cycle: formValues.rentPeriod })
@@ -559,11 +569,30 @@ function MyProperties({ addToast, onNavigate }) {
       ));
       addToast("Property updated!", "success");
       setEditTarget(null);
-    } catch {
-      addToast("Could not update property", "error");
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || "Could not update property", "error");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleToggle = async property => {
+    const next = property.status === "taken" ? "available" : "taken";
+    try {
+      await API.patch(`/landlord/properties/${property.id}/status`, { status: next });
+      setProperties(prev => prev.map(p => p.id === property.id ? { ...p, status: next } : p));
+      addToast(`Property marked ${next}`, "success");
+    } catch (err) { addToast(err.response?.data?.message || "Could not update status", "error"); }
+  };
+
+  const handleRetry = async property => {
+    const phone = window.prompt("Enter the M-Pesa number for the KSh 400 activation fee:");
+    if (!phone) return;
+    try {
+      const { data } = await API.post(`/landlord/properties/${property.id}/payment`, { phone });
+      if (data.payment?.redirect_url) window.location.href = data.payment.redirect_url;
+      else throw new Error("Payment provider did not return a checkout link");
+    } catch (err) { addToast(err.response?.data?.message || "Could not start payment", "error"); }
   };
 
   // Edit view
@@ -631,7 +660,7 @@ function MyProperties({ addToast, onNavigate }) {
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => (
-            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} />
+            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} />
           ))}
         </div>
       )}
@@ -645,12 +674,15 @@ function MyProperties({ addToast, onNavigate }) {
 // ─── Add Property page ────────────────────────────────────────────────────────
 function AddProperty({ addToast, onNavigate }) {
   const [loading, setLoading] = useState(false);
+  const [paymentOption, setPaymentOption] = useState("listing");
 
   const handleSubmit = async (fd) => {
     setLoading(true);
     try {
-      await API.post("/landlord/properties", fd);
-      addToast("Property listed successfully!", "success");
+      const { data } = await API.post("/landlord/properties", fd);
+      if (data.payment?.redirect_url) { addToast("Your listing was saved. Complete payment to activate it.", "info"); window.location.href = data.payment.redirect_url; return; }
+      if (data.paymentRequired) throw new Error("Payment provider did not return a checkout link");
+      addToast(data.paymentRequired ? "Property created and awaiting payment confirmation." : "Property listed successfully!", "success");
       onNavigate("properties");
     } catch (err) {
       addToast(err.response?.data?.message || "Could not save property", "error");
@@ -672,7 +704,8 @@ function AddProperty({ addToast, onNavigate }) {
         </div>
       </div>
       <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-        <PropertyForm onSubmit={handleSubmit} loading={loading} />
+        <PaymentOptions value={paymentOption} onChange={setPaymentOption} />
+        <PropertyForm onSubmit={handleSubmit} loading={loading} paymentOption={paymentOption} />
       </div>
     </div>
   );
@@ -843,7 +876,7 @@ const NAV = [
 
 // ─── Root component ───────────────────────────────────────────────────────────
 export default function LandlordDashboard() {
-  const [page,        setPage]        = useState("overview");
+  const [page,        setPage]        = useState(() => new URLSearchParams(window.location.search).get("page") || "overview");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toasts, add: addToast, remove: removeToast } = useToast();
 
@@ -984,4 +1017,22 @@ export default function LandlordDashboard() {
       </div>
     </div>
   );
+}
+
+function PaymentOptions({ value, onChange }) {
+  const options = [
+    { id: "monthly", title: "Monthly subscription", price: "KSh 1,000/month", note: "Covers all listings for 30 days" },
+    { id: "semester", title: "Semester subscription", price: "KSh 3,000/semester", note: "Covers all listings for 120 days" },
+    { id: "listing", title: "Pay-per-listing", price: "KSh 400 per saved property listing", note: "One-time payment; no subscription" },
+  ];
+  return <section style={{ marginBottom: 22, padding: 16, borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
+    <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Choose how to pay</h2>
+    <p style={{ margin: "0 0 12px", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>Payment starts after the listing details are saved. A confirmed subscription records its expiry automatically.</p>
+    <div style={{ display: "grid", gap: 8 }}>
+      {options.map(option => <label key={option.id} style={{ display: "flex", gap: 10, cursor: "pointer", padding: 12, borderRadius: 10, border: `1px solid ${value === option.id ? "#a78bfa" : "rgba(255,255,255,0.12)"}`, background: value === option.id ? "rgba(124,58,237,0.18)" : "rgba(0,0,0,0.12)" }}>
+        <input type="radio" name="listing-payment" value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
+        <span><strong style={{ color: "white", fontSize: 13 }}>{option.title} — {option.price}</strong><small style={{ display: "block", color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{option.note}</small></span>
+      </label>)}
+    </div>
+  </section>;
 }

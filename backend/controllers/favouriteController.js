@@ -1,6 +1,6 @@
-const db = require('../config/db');
+import db from '../config/db.js';
 
-exports.toggleFavorite = async (req, res) => {
+export const toggleFavorite = async (req, res) => {
   const { property_id } = req.body;
   try {
     const [exists] = await db.execute('SELECT id FROM favorites WHERE user_id = ? AND property_id = ?', [req.user.id, property_id]);
@@ -15,7 +15,7 @@ exports.toggleFavorite = async (req, res) => {
   }
 };
 
-exports.getFavorites = async (req, res) => {
+export const getFavorites = async (req, res) => {
   try {
     const [favs] = await db.execute(
       `SELECT p.*, (SELECT image_url FROM property_images WHERE property_id = p.id LIMIT 1) as main_image 

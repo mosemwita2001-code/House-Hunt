@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import API from '../api.js';
+import API from '../services/api.js';
+import { AuthContext } from '../context/AuthContext';
 
 const HOUSE_TYPES = [
   "Bedsitter","Single Room","One Bedroom","Two Bedroom","Three Bedroom",
@@ -36,6 +37,7 @@ const formatPrice = (price) => {
 };
 
 export default function Home() {
+  const { user } = useContext(AuthContext);
   const [properties, setProperties]   = useState([]);
   const [filtered, setFiltered]       = useState([]);
   const [loading, setLoading]         = useState(true);
@@ -372,6 +374,8 @@ backgroundPosition: 'center',
                         <img
                           src={imageUrl}
                           alt={house.title}
+                          loading="lazy"
+                          decoding="async"
                           style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s ease', transform: isHovered ? 'scale(1.07)' : 'scale(1)' }}
                           onError={e => { e.target.onerror = null; e.target.style.display = 'none'; }}
                         />
@@ -460,7 +464,7 @@ backgroundPosition: 'center',
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, marginBottom: 28, maxWidth: 400, margin: '0 auto 28px' }}>
             List your property and reach thousands of tenants across Kenya
           </p>
-          <Link to="/register" style={{
+          <Link to={user?.role === 'landlord' ? '/landlord?page=add' : '/register'} style={{
             display: 'inline-block', background: '#eab308', color: '#1a1a2e',
             padding: '14px 32px', borderRadius: 14, fontSize: 15, fontWeight: 700,
             textDecoration: 'none', fontFamily: 'inherit',

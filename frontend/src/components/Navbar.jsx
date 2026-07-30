@@ -21,8 +21,8 @@ export default function Navbar() {
           {user ? (
             <>
               {user.role === 'landlord' && (
-                <Link to="/landlord" className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium">
-                  <PlusSquare className="h-4 w-4" /> Dashboard
+                <Link to="/landlord?page=add" className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium">
+                  <PlusSquare className="h-4 w-4" /> List Property
                 </Link>
               )}
               {user.role === 'admin' && (

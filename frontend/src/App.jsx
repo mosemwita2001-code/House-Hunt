@@ -1,20 +1,22 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import Home from './pages/Home';
-import Login from './pages/login';
-import Register from './pages/Register';
-import PropertyDetails from './pages/propertyDetails';
-import LandlordDashboard from './pages/LandlordDashboard';
-import AdminDashboard from './pages/AdminDashboard'; // 1. IMPORT YOUR DASHBOARD
 import ProtectedRoute from './components/ProtectedRoute';
+
+const Home = lazy(() => import('./pages/Home'));
+const Login = lazy(() => import('./pages/login'));
+const Register = lazy(() => import('./pages/Register'));
+const PropertyDetails = lazy(() => import('./pages/propertyDetails'));
+const LandlordDashboard = lazy(() => import('./pages/LandlordDashboard'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Navbar />
+        <Suspense fallback={<main style={{ padding: 24 }}>Loading…</main>}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/property/:id" element={<PropertyDetails />} />
@@ -40,6 +42,7 @@ function App() {
             } 
           />
         </Routes>
+        </Suspense>
       </Router>
     </AuthProvider>
   );
