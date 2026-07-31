@@ -750,12 +750,13 @@ function AddProperty({ addToast, onNavigate }) {
 
 // ─── Inquiries page ───────────────────────────────────────────────────────────
 function Inquiries() {
-  // 1. Initialize as state so the list can update
-  const [inquiries, setInquiries] = useState([
-    { id: 1, user_name: "Amina Hassan",  user_email: "amina@email.com", user_phone: "+254712345678", property_title: "Modern 2BR in Kilimani", message: "Hi, I'm very interested. Is it still available? I'm looking to move in next month.", created_at: new Date().toISOString() },
-    { id: 2, user_name: "Peter Kamau",   user_email: "peter@email.com", user_phone: "+254723456789", property_title: "Studio Apt, Westlands",  message: "Can I schedule a viewing this weekend? Also, is parking included in the rent?", created_at: new Date(Date.now() - 86400000).toISOString() },
-    { id: 3, user_name: "Grace Wanjiku", user_email: "grace@email.com", user_phone: null,             property_title: "3BR Maisonette, Karen",  message: "Is the deposit negotiable? I can offer two months upfront if that helps.", created_at: new Date(Date.now() - 2*86400000).toISOString() },
-  ]);
+  const [inquiries, setInquiries] = useState([]);
+
+  useEffect(() => {
+    API.get("/landlord/inquiries")
+      .then(({ data }) => setInquiries(data || []))
+      .catch(() => setInquiries([]));
+  }, []);
 
   const [search, setSearch] = useState("");
   
@@ -773,7 +774,7 @@ function Inquiries() {
     <div style={{ maxWidth: 720 }}>
       {/* ... Header and Search code remains the same ... */}
       
-      {filtered.map((q, i) => (
+       {inquiries.length === 0 ? <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>No inquiries yet</p> : filtered.map((q, i) => (
         <div key={q.id} style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: 18, marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
             <div style={{ width: 40, height: 40, borderRadius: "50%", background: avatarBg[i % avatarBg.length], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "white", flexShrink: 0 }}>
