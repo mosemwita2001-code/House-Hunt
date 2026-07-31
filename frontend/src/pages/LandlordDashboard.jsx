@@ -127,6 +127,7 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
         <span style={{ position: "absolute", top: 12, right: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...ss }}>
           {(property.status || "available").charAt(0).toUpperCase() + (property.status || "available").slice(1)}
         </span>
+        {property.payment_status !== "paid" && <span style={{ position: "absolute", top: 12, left: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...STATUS_STYLE.pending }}>Pending payment</span>}
       </div>
       <div style={{ padding: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, color: "white", margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{property.title}</h3>
@@ -142,7 +143,7 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 400</button>}
+          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 10</button>}
           <button onClick={() => onToggle(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: "pointer" }}>
             Mark {property.status === "taken" ? "Available" : "Taken"}
           </button>
@@ -586,7 +587,7 @@ function MyProperties({ addToast, onNavigate }) {
   };
 
   const handleRetry = async property => {
-    const phone = window.prompt("Enter the M-Pesa number for the KSh 400 activation fee:");
+    const phone = window.prompt("Enter the M-Pesa number for the KSh 10 activation fee:");
     if (!phone) return;
     try {
       const { data } = await API.post(`/landlord/properties/${property.id}/payment`, { phone });
@@ -675,19 +676,42 @@ function MyProperties({ addToast, onNavigate }) {
 function AddProperty({ addToast, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [paymentOption, setPaymentOption] = useState("listing");
+  const [pendingPayment, setPendingPayment] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
 
-  const handleSubmit = async (fd) => {
+  const handleSubmit = async (fd, formValues) => {
     setLoading(true);
     try {
       const { data } = await API.post("/landlord/properties", fd);
-      if (data.payment?.redirect_url) { addToast("Your listing was saved. Complete payment to activate it.", "info"); window.location.href = data.payment.redirect_url; return; }
-      if (data.paymentRequired) throw new Error("Payment provider did not return a checkout link");
-      addToast(data.paymentRequired ? "Property created and awaiting payment confirmation." : "Property listed successfully!", "success");
+      if (data.paymentRequired === true) {
+        setPendingPayment({
+          propertyId: data.id,
+          payment: data.payment,
+          phone: formValues.mpesa_number || formValues.phoneNumber,
+        });
+        addToast("Payment required to publish this listing.", "warning");
+        return;
+      }
+      addToast("Property listed successfully!", "success");
       onNavigate("properties");
     } catch (err) {
       addToast(err.response?.data?.message || "Could not save property", "error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const startPlanPayment = async (plan) => {
+    if (!pendingPayment?.phone) return addToast("Enter an M-Pesa number before choosing a subscription.", "error");
+    setPlanLoading(true);
+    try {
+      const { data } = await API.post("/payments/plans", { plan, phone: pendingPayment.phone, property_id: pendingPayment.propertyId });
+      if (!data.redirect_url) throw new Error("Payment provider did not return a checkout link");
+      window.location.href = data.redirect_url;
+    } catch (err) {
+      addToast(err.response?.data?.message || err.message || "Could not start subscription payment", "error");
+    } finally {
+      setPlanLoading(false);
     }
   };
 
@@ -704,8 +728,21 @@ function AddProperty({ addToast, onNavigate }) {
         </div>
       </div>
       <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-        <PaymentOptions value={paymentOption} onChange={setPaymentOption} />
-        <PropertyForm onSubmit={handleSubmit} loading={loading} paymentOption={paymentOption} />
+        {pendingPayment ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <h2 style={{ margin: 0, color: "white", fontSize: 16 }}>Payment required to publish this listing</h2>
+              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5 }}>Your listing has been saved as <strong>Pending Payment</strong> and will remain unpublished until PesaPal confirms payment.</p>
+            </div>
+            {pendingPayment.payment?.redirect_url && <button onClick={() => { window.location.href = pendingPayment.payment.redirect_url; }} style={{ padding: "11px 16px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 700, cursor: "pointer" }}>Complete listing payment with PesaPal</button>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button disabled={planLoading} onClick={() => startPlanPayment("monthly")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: "pointer" }}>Choose monthly plan</button>
+              <button disabled={planLoading} onClick={() => startPlanPayment("semester")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: "pointer" }}>Choose semester plan</button>
+              <button onClick={() => onNavigate("properties")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>View pending listing</button>
+            </div>
+          </div>
+        ) : <><PaymentOptions value={paymentOption} onChange={setPaymentOption} />
+          <PropertyForm onSubmit={handleSubmit} loading={loading} paymentOption={paymentOption} /></>}
       </div>
     </div>
   );
@@ -1023,7 +1060,7 @@ function PaymentOptions({ value, onChange }) {
   const options = [
     { id: "monthly", title: "Monthly subscription", price: "KSh 1,000/month", note: "Covers all listings for 30 days" },
     { id: "semester", title: "Semester subscription", price: "KSh 3,000/semester", note: "Covers all listings for 120 days" },
-    { id: "listing", title: "Pay-per-listing", price: "KSh 400 per saved property listing", note: "One-time payment; no subscription" },
+    { id: "listing", title: "Pay-per-listing", price: "KSh 10 per saved property listing", note: "One-time payment; no subscription" },
   ];
   return <section style={{ marginBottom: 22, padding: 16, borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
     <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Choose how to pay</h2>
