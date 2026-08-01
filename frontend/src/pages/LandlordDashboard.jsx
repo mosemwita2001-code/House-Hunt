@@ -526,6 +526,7 @@ function MyProperties({ addToast, onNavigate }) {
   const [deleting,     setDeleting]     = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
   const [saving,       setSaving]       = useState(false);
+  const [retryPayment, setRetryPayment] = useState({ property: null, phone: "", error: "" });
 
   const loadProperties = useCallback(() => {
     setLoading(true);
@@ -586,11 +587,17 @@ function MyProperties({ addToast, onNavigate }) {
     } catch (err) { addToast(err.response?.data?.message || "Could not update status", "error"); }
   };
 
-  const handleRetry = async property => {
-    const phone = window.prompt("Enter the M-Pesa number for the KSh 400 activation fee:");
-    if (!phone) return;
+  const handleRetry = property => {
+    setRetryPayment({ property, phone: "", error: "" });
+  };
+
+  const submitRetry = async () => {
+    if (!retryPayment.phone.trim()) {
+      setRetryPayment(p => ({ ...p, error: "Please enter your M-Pesa number first." }));
+      return;
+    }
     try {
-      const { data } = await API.post(`/landlord/properties/${property.id}/payment`, { phone });
+      const { data } = await API.post(`/landlord/properties/${retryPayment.property.id}/payment`, { phone: retryPayment.phone.trim() });
       if (data.payment?.redirect_url) window.location.href = data.payment.redirect_url;
       else throw new Error("Payment provider did not return a checkout link");
     } catch (err) { addToast(err.response?.data?.message || "Could not start payment", "error"); }
@@ -665,6 +672,13 @@ function MyProperties({ addToast, onNavigate }) {
           ))}
         </div>
       )}
+
+      {retryPayment.property && <div style={{ marginTop: 18, maxWidth: 420, padding: 16, borderRadius: 14, background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)" }}>
+        <p style={{ margin: "0 0 10px", color: "white", fontSize: 13, fontWeight: 600 }}>Complete payment for {retryPayment.property.title}</p>
+        <input value={retryPayment.phone} onChange={e => setRetryPayment(p => ({ ...p, phone: e.target.value, error: "" }))} placeholder="M-Pesa number e.g. 0712345678" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+        {retryPayment.error && <p style={{ fontSize: 12, color: "#f87171", margin: "8px 0 0" }} role="alert">{retryPayment.error}</p>}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={() => setRetryPayment({ property: null, phone: "", error: "" })} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>Cancel</button><button onClick={submitRetry} style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 600, cursor: "pointer" }}>Continue to payment</button></div>
+      </div>}
 
       <ConfirmModal open={deleteModal.open} title="Delete Property" message="This will permanently remove the listing. This cannot be undone."
         onConfirm={handleDelete} onCancel={() => setDeleteModal({ open: false, id: null })} loading={deleting} />
@@ -820,6 +834,7 @@ function Profile({ addToast }) {
   const [pwForm, setPwForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
   const [profileLoading, setProfileLoading] = useState(false);
   const [pwLoading,      setPwLoading]      = useState(false);
+  const [passwordError,  setPasswordError]  = useState("");
 
   const saveProfile = (e) => {
     e.preventDefault();
@@ -834,8 +849,10 @@ function Profile({ addToast }) {
 
   const changePassword = (e) => {
     e.preventDefault();
-    if (pwForm.new_password !== pwForm.confirm_password) return addToast("Passwords do not match", "error");
-    if (pwForm.new_password.length < 6) return addToast("Password must be at least 6 characters", "error");
+    setPasswordError("");
+    if (!pwForm.current_password || !pwForm.new_password || !pwForm.confirm_password) return setPasswordError("Please fill in all password fields first.");
+    if (pwForm.new_password !== pwForm.confirm_password) return setPasswordError("Passwords do not match.");
+    if (pwForm.new_password.length < 6) return setPasswordError("Password must be at least 6 characters.");
     setPwLoading(true);
     setTimeout(() => { addToast("Password changed!", "success"); setPwLoading(false); setPwForm({ current_password: "", new_password: "", confirm_password: "" }); }, 700);
   };
@@ -893,6 +910,7 @@ function Profile({ addToast }) {
               <input style={inputStyle} type="password" value={pwForm[key]} onChange={e => setPW(key, e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="••••••••" />
             </div>
           ))}
+          {passwordError && <p style={{ fontSize: 12, color: "#f87171", margin: 0 }} role="alert">{passwordError}</p>}
           <button type="submit" disabled={pwLoading}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none", background: "#7c3aed", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: pwLoading ? 0.5 : 1, width: "fit-content", marginTop: 4 }}>
             {pwLoading && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />} Update Password

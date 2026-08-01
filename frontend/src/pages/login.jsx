@@ -5,11 +5,17 @@ import API from '../services/api';
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formError, setFormError] = useState('');
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setFormError('');
+    if (!formData.email.trim() || !formData.password) {
+      setFormError('Please enter your email and password first.');
+      return;
+    }
     try {
       // 1. Sends request to http://localhost:5000/api/auth/login
       const res = await API.post('/auth/login', formData); //
@@ -34,28 +40,27 @@ export default function Login() {
     } catch (err) {
       console.error(err); //
       // Uses the 'message' key which matches server.js response format
-      alert(err.response?.data?.message || 'Login failed. Check your credentials.'); //
+      setFormError(err.response?.data?.message || 'Login failed. Check your credentials.'); //
     }
   };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow-md rounded">
       <h2 className="text-2xl font-bold mb-4">Login</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4">
         <input 
           type="email" 
           placeholder="Email" 
           className="w-full border p-2" 
           onChange={(e) => setFormData({...formData, email: e.target.value})} 
-          required 
         />
         <input 
           type="password" 
           placeholder="Password" 
           className="w-full border p-2" 
           onChange={(e) => setFormData({...formData, password: e.target.value})} 
-          required 
         />
+        {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
         <button type="submit" className="w-full bg-green-600 text-white p-2">Login</button>
       </form>
     </div>
