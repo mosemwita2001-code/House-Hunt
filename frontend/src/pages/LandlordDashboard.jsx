@@ -308,7 +308,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
       </div>
 
       {/* Two-column grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="landlord-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div style={{ gridColumn: "1 / -1" }}>
           <Field label="Property Title *" error={errors.title}>
             <input style={inputStyle} value={form.title} onChange={e => set("title", e.target.value)}
@@ -405,7 +405,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
       </div>
 
       {/* Actions */}
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
+      <div className="landlord-form-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
         {onCancel && (
           <button type="button" onClick={onCancel}
             style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -458,7 +458,7 @@ function Overview({ addToast, onNavigate, user }) {
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 20 }}>
+      <div className="landlord-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 12, marginBottom: 20 }}>
         <StatCard label="Total Properties" value={stats?.total}     icon="🏠" color="violet"  loading={loading} />
         <StatCard label="Active Listings"  value={stats?.active}    icon="✅" color="emerald" loading={loading} />
         <StatCard label="Pending Review"   value={stats?.pending}   icon="⏳" color="amber"   loading={loading} />
@@ -466,7 +466,7 @@ function Overview({ addToast, onNavigate, user }) {
       </div>
 
       {/* Two columns */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <div className="landlord-overview-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         {/* Recent properties */}
         <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: 18 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -650,7 +650,7 @@ function MyProperties({ addToast, onNavigate }) {
       </div>
 
       {loading ? (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+        <div className="landlord-property-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {[1,2,3,4,5,6].map(i => <div key={i} style={{ height: 260, background: "rgba(255,255,255,0.03)", borderRadius: 20, border: "1px solid rgba(255,255,255,0.06)" }} />)}
         </div>
       ) : filtered.length === 0 ? (
@@ -659,7 +659,7 @@ function MyProperties({ addToast, onNavigate }) {
           <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 14 }}>No properties found</p>
         </div>
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
+        <div className="landlord-property-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => (
             <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} />
           ))}
@@ -942,7 +942,7 @@ export default function LandlordDashboard() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0d0d1a", color: "white", display: "flex" }}>
+    <div className="landlord-dashboard" style={{ minHeight: "100vh", background: "#0d0d1a", color: "white", display: "flex" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
         *{box-sizing:border-box;-webkit-font-smoothing:antialiased;}
@@ -1035,7 +1035,7 @@ export default function LandlordDashboard() {
       {/* ── Main ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
-        <header style={{ height: 64, background: "rgba(9,9,23,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", position: "sticky", top: 0, zIndex: 30 }}>
+        <header className="landlord-topbar" style={{ height: 64, background: "rgba(9,9,23,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", position: "sticky", top: 0, zIndex: 30 }}>
           <button id="ld-menu-btn" onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex" }}>
             <Menu size={20} />
           </button>
@@ -1049,7 +1049,7 @@ export default function LandlordDashboard() {
           </div>
         </header>
 
-        <main style={{ flex: 1, overflow: "auto", padding: "22px 24px" }}>
+        <main className="landlord-main" style={{ flex: 1, overflow: "auto", padding: "22px 24px" }}>
           {renderPage()}
         </main>
       </div>

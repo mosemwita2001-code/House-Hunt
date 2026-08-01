@@ -162,9 +162,9 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div style={{ display: "flex", height: "100vh", background: "#0b0f19", color: "#f3f4f6", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
+    <div className="admin-dashboard" style={{ display: "flex", height: "100vh", background: "#0b0f19", color: "#f3f4f6", fontFamily: "system-ui, sans-serif", overflow: "hidden" }}>
       {/* SIDEBAR */}
-      <div style={{ width: sidebarOpen ? 260 : 0, background: "#111827", borderRight: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", transition: "width 0.3s ease", overflow: "hidden", position: "relative" }}>
+      <div className="admin-sidebar" style={{ width: sidebarOpen ? 260 : 0, background: "#111827", borderRight: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", transition: "width 0.3s ease", overflow: "hidden", position: "relative" }}>
         <div style={{ padding: "24px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899)", padding: 8, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Building2 size={20} color="white" />
@@ -206,9 +206,9 @@ export default function AdminDashboard() {
       </div>
 
       {/* MAIN CONTAINER */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div className="admin-main" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* HEADER */}
-        <div style={{ height: 70, background: "#111827", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px" }}>
+        <div className="admin-topbar" style={{ height: 70, background: "#111827", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center" }}>
               {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
@@ -223,13 +223,13 @@ export default function AdminDashboard() {
         </div>
 
         {/* WORKSPACE CONTENT SCROLLER */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "32px 24px" }}>
+        <div className="admin-content" style={{ flex: 1, overflowY: "auto", padding: "32px 24px" }}>
           
           {/* TAB 1: OVERVIEW DASHBOARD */}
           {activeTab === "dashboard" && (
             <div>
               {/* COUNTERS METRIC GRID */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 20, marginBottom: 32 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 20, marginBottom: 32 }}>
                 {[
                   { label: "Total Platform Users", count: stats?.totalUsers ?? users.length, icon: Users, color: "#7c3aed" },
                   { label: "Approved Houses", count: stats?.activeListings ?? listings.filter(l => l.status === "approved" || l.status === "active").length, icon: Home, color: "#10b981" },
@@ -259,8 +259,8 @@ export default function AdminDashboard() {
 
           {/* TAB 2: USER CONTROLLER ENGINE */}
           {activeTab === "users" && (
-            <div style={{ background: "#111827", borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)", overflow: "hidden" }}>
-              <div style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
+            <div className="admin-table-card" style={{ background: "#111827", borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)", overflow: "hidden" }}>
+              <div className="admin-table-controls" style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
                   <Search size={16} color="rgba(255,255,255,0.3)" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                   <input type="text" placeholder="Search rows by profile name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
@@ -325,8 +325,8 @@ export default function AdminDashboard() {
 
           {/* TAB 3: LISTINGS MODERATION MATRIX */}
           {activeTab === "listings" && (
-            <div style={{ background: "#111827", borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)", overflow: "hidden" }}>
-              <div style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
+            <div className="admin-table-card" style={{ background: "#111827", borderRadius: 16, border: "1px solid rgba(255,255,255,0.04)", overflow: "hidden" }}>
+              <div className="admin-table-controls" style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
                   <Search size={16} color="rgba(255,255,255,0.3)" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
                   <input type="text" placeholder="Search by housing title or listing landlord..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
@@ -403,7 +403,7 @@ export default function AdminDashboard() {
             <div style={{ display: "flex", flexDirection: "column", gap: "28px", width: "100%" }}>
               
               {/* HIGHLIGHT PERFORMANCE ROW */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 280px), 1fr))", gap: "20px" }}>
                 {(() => {
                   const safeListings = Array.isArray(listings) ? listings : [];
                   const safeUsers = Array.isArray(users) ? users : [];
@@ -452,7 +452,7 @@ export default function AdminDashboard() {
               </div>
 
               {/* SPLIT SCREEN VISUAL ANALYTICS CONTEXT */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "24px", alignItems: "start" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: "24px", alignItems: "start" }}>
                 
                 {/* GENUINE DATA INTEGRATED SVG LINE CHART */}
                 <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "16px", padding: "24px" }}>
@@ -574,7 +574,7 @@ export default function AdminDashboard() {
               {/* ACCOUNT ROLES MATRIX SYSTEM BOX */}
               <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "16px", padding: "24px" }}>
                 <h4 style={{ margin: "0 0 16px 0", fontSize: "15px", fontWeight: 600, color: "white" }}>User Base Segmentation Parameters</h4>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", gap: "16px" }}>
                   {(() => {
                     const safeUsers = Array.isArray(users) ? users : [];
                     const totalUsersCount = safeUsers.length || 1;

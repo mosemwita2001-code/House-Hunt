@@ -100,7 +100,7 @@ export default function Home() {
   const hasFilters = search || houseType || county || minPrice || maxPrice || sortBy !== 'newest';
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8f7f4', fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="home-page" style={{ minHeight: '100vh', background: '#f8f7f4', fontFamily: "'DM Sans', sans-serif" }}>
 
       {/* Google Fonts */}
       <style>{`
@@ -121,7 +121,7 @@ export default function Home() {
       `}</style>
 
       {/* ── HERO ── */}
-      <div ref={heroRef} style={{
+      <div ref={heroRef} className="home-hero" style={{
         position: 'relative', overflow: 'hidden',
 backgroundImage: 'url("/hero.jpg")',
 backgroundSize: 'cover',
@@ -154,7 +154,7 @@ backgroundPosition: 'center',
           </p>
 
           {/* ── SEARCH BAR ── */}
-          <div className="fade-up-3" style={{
+          <div className="fade-up-3 home-search-bar" style={{
             background: 'rgba(255,255,255,0.97)', borderRadius: 20,
             padding: '8px 8px 8px 20px', display: 'flex', alignItems: 'center',
             gap: 8, boxShadow: '0 24px 80px rgba(0,0,0,0.3)', maxWidth: 680, margin: '0 auto',
@@ -197,7 +197,7 @@ backgroundPosition: 'center',
           </div>
 
           {/* Stats */}
-          <div className="fade-up-3" style={{ display: 'flex', justifyContent: 'center', gap: 32, marginTop: 36 }}>
+          <div className="fade-up-3 home-stats" style={{ display: 'flex', justifyContent: 'center', gap: 32, marginTop: 36 }}>
             {[
               { label: 'Listed Properties', value: properties.length },
               { label: 'Counties Covered', value: [...new Set(properties.map(p => p.county))].length },
@@ -296,7 +296,7 @@ backgroundPosition: 'center',
       </div>
 
       {/* ── RESULTS ── */}
-      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
+      <main className="home-results" style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px' }}>
 
         {/* Results header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
@@ -319,7 +319,7 @@ backgroundPosition: 'center',
 
         {/* Loading skeletons */}
         {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
+          <div className="home-property-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
             {[1,2,3,4,5,6].map(i => (
               <div key={i} style={{ borderRadius: 20, overflow: 'hidden', background: 'white' }}>
                 <div className="shimmer" style={{ height: 220 }} />
@@ -347,7 +347,7 @@ backgroundPosition: 'center',
 
         {/* Property Grid */}
         {!loading && filtered.length > 0 && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
+          <div className="home-property-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
             {filtered.map((house, i) => {
               const imageUrl = getFirstImage(house.image_path);
               const isHovered = hoveredId === house.id;

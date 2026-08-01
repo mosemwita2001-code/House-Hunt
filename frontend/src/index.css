@@ -1,3 +1,38 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+html, body, #root { min-width: 0; }
+img, svg { max-width: 100%; }
+
+@media (max-width: 640px) {
+  nav > .max-w-7xl { flex-wrap: wrap; justify-content: center; gap: 12px; }
+  nav > .max-w-7xl > div { width: 100%; flex-wrap: wrap; justify-content: center; gap: 8px 16px; }
+
+  .home-hero { min-height: 0 !important; padding: 56px 16px 44px !important; }
+  .home-search-bar { align-items: stretch !important; flex-wrap: wrap; padding: 10px 12px !important; }
+  .home-search-bar input { flex: 1 1 calc(100% - 30px) !important; min-width: 0; width: auto; }
+  .home-search-bar button { flex: 1 1 0; justify-content: center; }
+  .home-stats { gap: 16px !important; }
+  .home-results { padding: 28px 16px !important; }
+  .home-property-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 16px !important; }
+  .landlord-form-grid, .landlord-overview-grid, .landlord-property-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .landlord-form-actions { flex-wrap: wrap; }
+  .landlord-form-actions button { flex: 1 1 120px; }
+  .landlord-main { padding: 16px !important; }
+  .landlord-topbar { padding: 0 16px !important; }
+  .landlord-topbar > div > span:first-child { display: none; }
+  .admin-sidebar { position: fixed !important; top: 0; bottom: 0; left: 0; z-index: 60; }
+  .admin-topbar { height: auto !important; min-height: 60px; padding: 10px 16px !important; gap: 10px; }
+  .admin-topbar h1 { font-size: 16px !important; }
+  .admin-content { padding: 20px 16px !important; }
+  .admin-table-card { overflow-x: auto !important; }
+  .admin-table-controls { align-items: stretch !important; flex-direction: column; padding: 16px !important; }
+  .admin-table-controls > div { max-width: none !important; width: 100%; }
+  .admin-table-card table { min-width: 720px; }
+}
+
+@media (max-width: 374px) {
+  .home-stats { gap: 10px !important; }
+  .home-stats > div > div:first-child { font-size: 20px !important; }
+}

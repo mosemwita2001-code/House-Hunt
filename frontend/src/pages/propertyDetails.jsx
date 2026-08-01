@@ -51,7 +51,7 @@ export default function PropertyDetails() {
     finally { setSubmitting(false); }
   };
 
-  if (loading) return <div className="max-w-6xl mx-auto px-6 py-8">Loading...</div>;
+  if (loading) return <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6">Loading...</div>;
   if (!property) return <div className="text-center py-12">Property asset could not be located.</div>;
   const full = Boolean(property.full_access && property.description !== undefined);
   const landlordPhone = property.phone_number || '';
@@ -59,8 +59,8 @@ export default function PropertyDetails() {
   const images = property.image_path ? property.image_path.split(',').map(n => n.trim()).filter(Boolean) : [];
   const user = sessionUser();
 
-  return <div className="max-w-6xl mx-auto px-6 py-8">
-    <h1 className="text-3xl font-bold text-slate-900 mb-2">{property.title}</h1>
+  return <div className="max-w-6xl mx-auto px-4 py-8 sm:px-6">
+    <h1 className="text-2xl font-bold text-slate-900 mb-2 sm:text-3xl">{property.title}</h1>
     <div className="flex items-center gap-2 text-slate-500 mb-6"><MapPin className="h-4 w-4" /><span>{property.town}, {property.county}</span></div>
     <div className="flex flex-col gap-4">
       {images.length ? images.map((img, index) => { const src = img.startsWith('http') ? img : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}/uploads/${img}`; return imgErrors[img] ? <div key={img} className="bg-slate-100 h-72 flex items-center justify-center"><ImageOff /></div> : <img key={img} src={src} alt={property.title} loading={index === 0 ? 'eager' : 'lazy'} decoding="async" className="w-full h-72 object-cover rounded-xl" onError={() => setImgErrors(p => ({ ...p, [img]: true }))} />; }) : <div className="h-64 bg-slate-100 flex items-center justify-center rounded-xl text-slate-400">No photos available</div>}
