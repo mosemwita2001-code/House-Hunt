@@ -143,7 +143,7 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 10</button>}
+          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 400</button>}
           <button onClick={() => onToggle(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: "pointer" }}>
             Mark {property.status === "taken" ? "Available" : "Taken"}
           </button>
@@ -587,7 +587,7 @@ function MyProperties({ addToast, onNavigate }) {
   };
 
   const handleRetry = async property => {
-    const phone = window.prompt("Enter the M-Pesa number for the KSh 10 activation fee:");
+    const phone = window.prompt("Enter the M-Pesa number for the KSh 400 activation fee:");
     if (!phone) return;
     try {
       const { data } = await API.post(`/landlord/properties/${property.id}/payment`, { phone });
@@ -1061,7 +1061,7 @@ function PaymentOptions({ value, onChange }) {
   const options = [
     { id: "monthly", title: "Monthly subscription", price: "KSh 1,000/month", note: "Covers all listings for 30 days" },
     { id: "semester", title: "Semester subscription", price: "KSh 3,000/semester", note: "Covers all listings for 120 days" },
-    { id: "listing", title: "Pay-per-listing", price: "KSh 10 per saved property listing", note: "One-time payment; no subscription" },
+    { id: "listing", title: "Pay-per-listing", price: "KSh 400 per saved property listing", note: "One-time payment; no subscription" },
   ];
   return <section style={{ marginBottom: 22, padding: 16, borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
     <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Choose how to pay</h2>

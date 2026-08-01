@@ -69,7 +69,7 @@ const transientDbErrors = new Set(['ECONNRESET', 'PROTOCOL_CONNECTION_LOST', 'ET
 const PLAN_OPTIONS = {
   monthly: { amount: 1000, days: 30, label: 'Monthly subscription' },
   semester: { amount: 3000, days: 120, label: 'Semester subscription' },
-  listing: { amount: 10, label: 'Pay-per-listing' },
+  listing: { amount: 400, label: 'Pay-per-listing' },
 };
 
 async function executeReadWithRetry(sql, params) {
@@ -498,7 +498,7 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
       return res.json({ message: 'Property updated successfully', paymentRequired: false });
     }
     const payment = await createPayment({
-      type: 'listing_fee', amount: 10,
+      type: 'listing_fee', amount: 400,
       phone: mpesa_number || phone_number, propertyId: req.params.id, landlordId: req.user.id,
       description: `Listing renewal fee for property ${req.params.id}`,
       billingAddress: await getUserBillingAddress(req.user.id),
@@ -540,7 +540,7 @@ app.post('/api/payments/view', optionalAuth, async (req, res) => {
     const [[property]] = await db.execute("SELECT id, title, status, verification_status, payment_status FROM properties WHERE id=?", [property_id]);
     if (!property || property.status !== 'available' || property.verification_status !== 'approved')
       return res.status(409).json({ message: 'This house has been taken or is not available' });
-    const payment = await createPayment({ type: 'view_fee', amount: 10, phone, propertyId: property_id, description: `View fee for property ${property_id}`, billingAddress: { email, firstName: first_name, lastName: last_name, countryCode: country_code } });
+    const payment = await createPayment({ type: 'view_fee', amount: 40, phone, propertyId: property_id, description: `View fee for property ${property_id}`, billingAddress: { email, firstName: first_name, lastName: last_name, countryCode: country_code } });
     res.status(201).json(payment);
   } catch (err) { console.error('[Payments] view-fee order failed:', err); respondPaymentError(res, err); }
 });
@@ -556,7 +556,7 @@ app.post('/api/landlord/properties/:id/payment', protect, authorize('landlord'),
       await db.execute("UPDATE properties SET payment_status='paid' WHERE id=?", [property.id]);
       return res.json({ paymentRequired: false });
     }
-    const payment = await createPayment({ type: 'listing_fee', amount: 10, phone, propertyId: property.id, landlordId: req.user.id, description: `Listing activation fee for property ${property.id}`, billingAddress: await getUserBillingAddress(req.user.id) });
+    const payment = await createPayment({ type: 'listing_fee', amount: 400, phone, propertyId: property.id, landlordId: req.user.id, description: `Listing activation fee for property ${property.id}`, billingAddress: await getUserBillingAddress(req.user.id) });
     res.status(201).json({ paymentRequired: true, payment });
   } catch (err) { console.error('[Payments] listing-fee order failed:', err); respondPaymentError(res, err); }
 });
@@ -754,9 +754,9 @@ app.post('/api/inquiries', async (req, res) => {
     const [payments] = await db.execute(
       `SELECT id FROM payments WHERE type='view_fee' AND amount=? AND status='success' AND related_property_id=? AND payer_phone=?
        AND (? IS NULL OR id=?) ORDER BY id DESC LIMIT 1`,
-       [Number(process.env.VIEW_FEE_AMOUNT || 10), property_id, phone, payment_id || null, payment_id || null]
+       [Number(process.env.VIEW_FEE_AMOUNT || 40), property_id, phone, payment_id || null, payment_id || null]
     );
-    if (!payments.length) return res.status(402).json({ message: 'A successful KSh 10 view payment is required first' });
+    if (!payments.length) return res.status(402).json({ message: 'A successful KSh 40 view payment is required first' });
     await db.execute(
       'INSERT INTO inquiries (property_id, user_name, user_email, message, payment_id) VALUES (?,?,?,?,?)',
       [property_id, user_name.trim(), user_email.trim(), message.trim(), payments[0].id]
