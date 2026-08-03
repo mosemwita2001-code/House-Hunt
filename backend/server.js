@@ -11,6 +11,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { handleIPN, registerIPN, submitOrder } from './pesapalService.js';
+import { pagination } from './pagination.js';
 
 /* ── Cloudinary config ──────────────────────────────────────────────────── */
 cloudinary.config({
@@ -143,12 +144,6 @@ const normalizeEmail = value => String(value || '').trim().toLowerCase();
 const trimText = (value, maxLength) => String(value || '').trim().slice(0, maxLength);
 const tokenHash = token => createHash('sha256').update(token).digest('hex');
 const viewAccessToken = () => randomBytes(32).toString('base64url');
-const toPositiveInt = (value, fallback, maximum) => Math.min(Math.max(Number.parseInt(value, 10) || fallback, 1), maximum);
-const pagination = query => {
-  const page = toPositiveInt(query.page, 1, 1000000);
-  const limit = toPositiveInt(query.limit, 24, 100);
-  return { page, limit, offset: (page - 1) * limit };
-};
 const paginated = (rows, page, limit) => ({ data: rows, pagination: { page, limit, hasMore: rows.length === limit } });
 const signToken = user => jwt.sign(
   { id: user.id, role: user.role },
@@ -427,8 +422,8 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
     q += sort === 'lowest'  ? ' ORDER BY p.price ASC'
        : sort === 'highest' ? ' ORDER BY p.price DESC'
        : ' ORDER BY p.created_at DESC';
-    q += ' LIMIT ? OFFSET ?';
-    const [rows] = await executeReadWithRetry(q, [...params, limit, offset]);
+    q += ` LIMIT ${limit} OFFSET ${offset}`;
+    const [rows] = await executeReadWithRetry(q, params);
     res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('GET /properties error:', err);
@@ -512,8 +507,8 @@ app.get('/api/landlord/my-properties', protect, authorize('landlord'), async (re
   try {
     const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(
-      'SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
-      [req.user.id, limit, offset]
+      `SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      [req.user.id]
     );
     res.json(paginated(rows, page, limit));
   } catch (err) {
@@ -786,8 +781,8 @@ app.get('/api/admin/users', protect, authorize('admin'), async (req, res) => {
       LEFT JOIN properties p ON p.landlord_id = u.id
       GROUP BY u.id
       ORDER BY u.created_at DESC
-      LIMIT ? OFFSET ?
-    `, [limit, offset]);
+      LIMIT ${limit} OFFSET ${offset}
+    `);
     res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('Admin users error:', err);
@@ -827,8 +822,8 @@ app.get('/api/admin/listings', protect, authorize('admin'), async (req, res) => 
       FROM properties p
       LEFT JOIN users u ON u.id = p.landlord_id
       ORDER BY p.created_at DESC
-      LIMIT ? OFFSET ?
-    `, [limit, offset]);
+      LIMIT ${limit} OFFSET ${offset}
+    `);
     res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('Admin listings error:', err);
@@ -898,8 +893,8 @@ app.get('/api/favorites', protect, async (req, res) => {
       SELECT p.* FROM favorites f
       JOIN properties p ON f.property_id = p.id
       WHERE f.user_id = ? AND p.payment_status='paid' AND p.status='available'
-      ORDER BY f.id DESC LIMIT ? OFFSET ?
-    `, [req.user.id, limit, offset]);
+      ORDER BY f.id DESC LIMIT ${limit} OFFSET ${offset}
+    `, [req.user.id]);
     res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('GET /favorites error:', err);
@@ -945,8 +940,8 @@ app.get('/api/landlord/inquiries', protect, authorize('landlord'), async (req, r
       JOIN properties p ON i.property_id = p.id
       WHERE p.landlord_id = ?
       ORDER BY i.created_at DESC
-      LIMIT ? OFFSET ?
-    `, [req.user.id, limit, offset]);
+      LIMIT ${limit} OFFSET ${offset}
+    `, [req.user.id]);
     res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('GET /landlord/inquiries error:', err);
@@ -1036,7 +1031,7 @@ app.get('/api/admin/payments', protect, authorize('admin'), async (req, res) => 
     const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`SELECT p.*, pr.title AS property_title, u.name AS landlord_name
       FROM payments p LEFT JOIN properties pr ON pr.id=p.related_property_id LEFT JOIN users u ON u.id=p.related_landlord_id
-      ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset]);
+      ORDER BY p.created_at DESC LIMIT ${limit} OFFSET ${offset}`);
     res.json(paginated(rows, page, limit));
   } catch (err) { console.error('Admin payments error:', err); res.status(500).json({ message: 'Unable to load payments' }); }
 });
@@ -1060,7 +1055,7 @@ app.patch('/api/admin/payments/:id/resolve', protect, authorize('admin'), async 
 app.get('/api/admin/inquiries', protect, authorize('admin'), async (req, res) => {
   try {
     const { page, limit, offset } = pagination(req.query);
-    const [rows] = await db.execute('SELECT i.*, p.title AS property_title FROM inquiries i JOIN properties p ON p.id=i.property_id ORDER BY i.created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+    const [rows] = await db.execute(`SELECT i.*, p.title AS property_title FROM inquiries i JOIN properties p ON p.id=i.property_id ORDER BY i.created_at DESC LIMIT ${limit} OFFSET ${offset}`);
     res.json(paginated(rows, page, limit));
   } catch (err) { console.error('Admin inquiries error:', err); res.status(500).json({ message: 'Unable to load inquiries' }); }
 });
