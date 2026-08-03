@@ -4,8 +4,5 @@
 CREATE INDEX idx_properties_public_listing
   ON properties (verification_status, payment_status, status, created_at);
 
-CREATE INDEX idx_payments_view_access
-  ON payments (type, status, related_property_id, payer_phone);
-
 CREATE INDEX idx_users_role_status_created
   ON users (role, account_status, created_at);

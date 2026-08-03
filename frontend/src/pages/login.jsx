@@ -48,14 +48,24 @@ export default function Login() {
     <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow-md rounded">
       <h2 className="text-2xl font-bold mb-4">Login</h2>
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
+        <label htmlFor="login-email">Email address</label>
         <input 
           type="email" 
+          id="login-email"
+          name="email"
+          value={formData.email}
+          autoComplete="email"
           placeholder="Email" 
           className="w-full border p-2" 
           onChange={(e) => setFormData({...formData, email: e.target.value})} 
         />
+        <label htmlFor="login-password">Password</label>
         <input 
           type="password" 
+          id="login-password"
+          name="password"
+          value={formData.password}
+          autoComplete="current-password"
           placeholder="Password" 
           className="w-full border p-2" 
           onChange={(e) => setFormData({...formData, password: e.target.value})} 

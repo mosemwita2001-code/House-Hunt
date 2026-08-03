@@ -39,15 +39,15 @@ API.interceptors.response.use(
 export const getDashboardStats = () => API.get('/admin/stats');
 
 // User Management
-export const getAllUsers = () => API.get('/admin/users');
+export const getAllUsers = (params) => API.get('/admin/users', { params });
 export const updateUserStatus = (id, status) => API.patch(`/admin/users/${id}/status`, { status });
 export const deleteUser = (id) => API.delete(`/admin/users/${id}`);
 
 // Listing Management
-export const getAllListings = () => API.get('/admin/listings');
+export const getAllListings = (params) => API.get('/admin/listings', { params });
 export const updateListingStatus = (id, status) => API.patch(`/admin/listings/${id}/status`, { status });
 export const deleteListing = (id) => API.delete(`/admin/listings/${id}`);
-export const getAllPayments = () => API.get('/admin/payments');
+export const getAllPayments = (params) => API.get('/admin/payments', { params });
 export const resolvePayment = (id, confirmation_code) => API.patch(`/admin/payments/${id}/resolve`, { confirmation_code });
 
 export default API;

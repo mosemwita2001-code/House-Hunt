@@ -29,10 +29,14 @@ export default function Register() {
     <div className="max-w-md mx-auto mt-10 p-6 bg-white shadow-md rounded">
       <h2 className="text-2xl font-bold mb-4">Register</h2>
       <form onSubmit={handleSubmit} noValidate className="space-y-4">
-        <input type="text" placeholder="Name" className="w-full border p-2" onChange={(e) => setFormData({...formData, name: e.target.value})} />
-        <input type="email" placeholder="Email" className="w-full border p-2" onChange={(e) => setFormData({...formData, email: e.target.value})} />
-        <input type="password" placeholder="Password" className="w-full border p-2" onChange={(e) => setFormData({...formData, password: e.target.value})} />
-        <select className="w-full border p-2" onChange={(e) => setFormData({...formData, role: e.target.value})}>
+        <label htmlFor="register-name">Full name</label>
+        <input id="register-name" name="name" type="text" autoComplete="name" placeholder="Name" className="w-full border p-2" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+        <label htmlFor="register-email">Email address</label>
+        <input id="register-email" name="email" type="email" autoComplete="email" placeholder="Email" className="w-full border p-2" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+        <label htmlFor="register-password">Password</label>
+        <input id="register-password" name="password" type="password" autoComplete="new-password" placeholder="Password" className="w-full border p-2" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} />
+        <label htmlFor="register-role">Account type</label>
+        <select id="register-role" name="role" className="w-full border p-2" value={formData.role} onChange={(e) => setFormData({...formData, role: e.target.value})}>
           <option value="tenant">Tenant</option>
           <option value="landlord">Landlord</option>
         </select>

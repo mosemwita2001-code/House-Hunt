@@ -1,10 +1,13 @@
 import 'dotenv/config';
 import express        from 'express';
 import cors           from 'cors';
+import helmet         from 'helmet';
+import rateLimit      from 'express-rate-limit';
 import mysql          from 'mysql2/promise';
 import bcrypt         from 'bcrypt';
 import jwt            from 'jsonwebtoken';
 import multer         from 'multer';
+import { createHash, randomBytes } from 'node:crypto';
 import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { handleIPN, registerIPN, submitOrder } from './pesapalService.js';
@@ -26,10 +29,68 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: {
+    files: 10,
+    fileSize: 8 * 1024 * 1024,
+    fields: 30,
+    fieldSize: 100 * 1024,
+  },
+  fileFilter: (_req, file, callback) => {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.mimetype)) {
+      return callback(new Error('Only JPEG, PNG, and WebP images are allowed'));
+    }
+    callback(null, true);
+  },
+});
 
 const app  = express();
 const PORT = process.env.PORT || 5000;
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured');
+}
+
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      defaultSrc: ["'none'"],
+      baseUri: ["'none'"],
+      frameAncestors: ["'none'"],
+      formAction: ["'none'"],
+    },
+  },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  crossOriginResourcePolicy: false,
+}));
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many requests. Please try again later.' },
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { message: 'Too many sign-in attempts. Please try again later.' },
+});
+const paymentLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many payment attempts. Please try again later.' },
+});
 
 /* ── CORS ───────────────────────────────────────────────────────────────── */
 app.use(cors({
@@ -40,17 +101,21 @@ app.use(cors({
     'http://127.0.0.1:5174',
     process.env.FRONTEND_URL,        // add your frontend URL in env variables
   ].filter(Boolean),
-  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'X-View-Access-Token'],
+  maxAge: 86400,
+  credentials: false,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+app.use('/api', apiLimiter);
 
 /* ── DB pool ────────────────────────────────────────────────────────────── */
 const db = mysql.createPool({
   host:               process.env.DB_HOST     || 'localhost',
   user:               process.env.DB_USER     || 'root',
   password:           process.env.DB_PASSWORD || '',
-  database:           process.env.DB_NAME     || 'house_hunting_db',
+  database:           process.env.DB_NAME     || 'house_hunting',
   port:               Number(process.env.DB_PORT) || 3306,
   ssl:                { rejectUnauthorized: false },
   waitForConnections: true,
@@ -67,10 +132,29 @@ const db = mysql.createPool({
 
 const transientDbErrors = new Set(['ECONNRESET', 'PROTOCOL_CONNECTION_LOST', 'ETIMEDOUT', 'ECONNREFUSED']);
 const PLAN_OPTIONS = {
-  monthly: { amount: 1000, days: 30, label: 'Monthly subscription' },
-  semester: { amount: 3000, days: 120, label: 'Semester subscription' },
-  listing: { amount: 400, label: 'Pay-per-listing' },
+  monthly: { amount: Number(process.env.MONTHLY_PLAN_AMOUNT || 1000), days: 30, label: 'Monthly subscription' },
+  semester: { amount: Number(process.env.SEMESTER_PLAN_AMOUNT || 3000), days: 120, label: 'Semester subscription' },
+  listing: { amount: Number(process.env.LISTING_FEE_AMOUNT || 400), label: 'Pay-per-listing' },
 };
+
+const VIEW_FEE_AMOUNT = Number(process.env.VIEW_FEE_AMOUNT || 40);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalizeEmail = value => String(value || '').trim().toLowerCase();
+const trimText = (value, maxLength) => String(value || '').trim().slice(0, maxLength);
+const tokenHash = token => createHash('sha256').update(token).digest('hex');
+const viewAccessToken = () => randomBytes(32).toString('base64url');
+const toPositiveInt = (value, fallback, maximum) => Math.min(Math.max(Number.parseInt(value, 10) || fallback, 1), maximum);
+const pagination = query => {
+  const page = toPositiveInt(query.page, 1, 1000000);
+  const limit = toPositiveInt(query.limit, 24, 100);
+  return { page, limit, offset: (page - 1) * limit };
+};
+const paginated = (rows, page, limit) => ({ data: rows, pagination: { page, limit, hasMore: rows.length === limit } });
+const signToken = user => jwt.sign(
+  { id: user.id, role: user.role },
+  process.env.JWT_SECRET,
+  { expiresIn: '7d', algorithm: 'HS256' },
+);
 
 async function executeReadWithRetry(sql, params) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -100,12 +184,12 @@ async function executePaymentWriteWithRetry(sql, params) {
 
 function respondPaymentError(res, error) {
   if (error?.code === 'PESAPAL_NETWORK_ERROR') {
-    return res.status(502).json({ message: error.message, code: error.code });
+    return res.status(502).json({ message: 'The payment provider is temporarily unavailable. Please try again.', code: error.code });
   }
   if (isTransientDbError(error)) {
     return res.status(503).json({ message: 'The payment service temporarily lost its database connection. Please try again.', code: 'PAYMENT_DATABASE_CONNECTION_RESET' });
   }
-  return res.status(502).json({ message: error.message || 'Unable to start payment. Please try again.', code: 'PAYMENT_INITIATION_FAILED' });
+  return res.status(502).json({ message: 'Unable to start payment. Please try again.', code: 'PAYMENT_INITIATION_FAILED' });
 }
 
 /* test connection on startup */
@@ -114,11 +198,14 @@ db.getConnection()
   .catch(e => console.error('❌ MySQL connection failed:', e.message));
 
 /* ── Auth middleware ────────────────────────────────────────────────────── */
-const protect = (req, res, next) => {
+const protect = async (req, res, next) => {
   const h = req.headers.authorization;
   if (!h?.startsWith('Bearer ')) return res.status(401).json({ message: 'No token provided' });
   try {
-    req.user = jwt.verify(h.split(' ')[1], process.env.JWT_SECRET);
+    const decoded = jwt.verify(h.split(' ')[1], process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    const [[user]] = await executeReadWithRetry('SELECT id, role, account_status FROM users WHERE id=? LIMIT 1', [decoded.id]);
+    if (!user || user.account_status === 'suspended') return res.status(403).json({ message: 'Account suspended. Contact support.' });
+    req.user = { id: user.id, role: user.role };
     next();
   } catch {
     res.status(401).json({ message: 'Token invalid or expired' });
@@ -134,7 +221,7 @@ const authorize = (...roles) => (req, res, next) => {
 const optionalAuth = (req, res, next) => {
   const h = req.headers.authorization;
   if (h?.startsWith('Bearer ')) {
-    try { req.user = jwt.verify(h.split(' ')[1], process.env.JWT_SECRET); } catch { /* public request */ }
+    try { req.user = jwt.verify(h.split(' ')[1], process.env.JWT_SECRET, { algorithms: ['HS256'] }); } catch { /* public request */ }
   }
   next();
 };
@@ -147,13 +234,14 @@ async function hasPaidView(req, propertyId) {
   if (isAdmin(req)) return true;
   const [[property]] = await db.execute('SELECT landlord_id FROM properties WHERE id=?', [propertyId]);
   if (property && req.user?.role === 'landlord' && Number(req.user.id) === Number(property.landlord_id)) return true;
-  const viewerPhone = req.headers['x-viewer-phone'] || req.body?.phone_number || req.query?.phone || '';
+  const accessToken = String(req.headers['x-view-access-token'] || req.query?.view_token || '');
+  if (!accessToken || accessToken.length < 32) return false;
   const [rows] = await db.execute(
     `SELECT p.id FROM payments p
      WHERE p.type='view_fee' AND p.status='success' AND p.related_property_id=?
-       AND p.payer_phone=?
+       AND p.view_access_token_hash=?
      LIMIT 1`,
-    [propertyId, viewerPhone]
+    [propertyId, tokenHash(accessToken)]
   );
   return rows.length > 0;
 }
@@ -173,11 +261,11 @@ async function getUserBillingAddress(userId) {
   return { email: user.email, firstName, lastName: lastNameParts.join(' ') || firstName, countryCode: 'KE' };
 }
 
-async function createPayment({ type, amount, phone, propertyId = null, landlordId = null, description, billingAddress }) {
+async function createPayment({ type, amount, phone, propertyId = null, landlordId = null, description, billingAddress, viewAccessToken = null }) {
   const reference = `${type}-${propertyId || landlordId || 'platform'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const insertSql = `INSERT INTO payments (type, amount, payer_phone, related_property_id, related_landlord_id, pesapal_merchant_reference, status)
-    VALUES (?,?,?,?,?,?, 'pending')`;
-  const insertParams = [type, amount, phone, propertyId, landlordId, reference];
+  const insertSql = `INSERT INTO payments (type, amount, payer_phone, related_property_id, related_landlord_id, pesapal_merchant_reference, view_access_token_hash, status)
+    VALUES (?,?,?,?,?,?,?, 'pending')`;
+  const insertParams = [type, amount, phone, propertyId, landlordId, reference, viewAccessToken ? tokenHash(viewAccessToken) : null];
   let result;
   try {
     [result] = await db.execute(insertSql, insertParams);
@@ -191,7 +279,7 @@ async function createPayment({ type, amount, phone, propertyId = null, landlordI
   try {
     const order = await submitOrder({ amount, reference, phone, description, billingAddress });
     await executePaymentWriteWithRetry('UPDATE payments SET pesapal_order_tracking_id=? WHERE id=?', [order.order_tracking_id, result.insertId]);
-    return { paymentId: result.insertId, reference, ...order };
+    return { paymentId: result.insertId, reference, ...(viewAccessToken ? { view_access_token: viewAccessToken } : {}), ...order };
   } catch (error) {
     console.error('[Payments] PesaPal order failed:', JSON.stringify({ type, amount, propertyId, landlordId, reference, error: error.message }));
     await executePaymentWriteWithRetry('UPDATE payments SET status=? WHERE id=?', ['failed', result.insertId]);
@@ -202,9 +290,9 @@ async function createPayment({ type, amount, phone, propertyId = null, landlordI
 async function createPendingPayment(connection, { type, amount, phone, propertyId = null, landlordId = null }) {
   const reference = `${type}-${propertyId || landlordId || 'platform'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const [result] = await connection.execute(
-    `INSERT INTO payments (type, amount, payer_phone, related_property_id, related_landlord_id, pesapal_merchant_reference, status)
-     VALUES (?,?,?,?,?,?, 'pending')`,
-    [type, amount, phone, propertyId, landlordId, reference]
+    `INSERT INTO payments (type, amount, payer_phone, related_property_id, related_landlord_id, pesapal_merchant_reference, view_access_token_hash, status)
+     VALUES (?,?,?,?,?,?,?, 'pending')`,
+    [type, amount, phone, propertyId, landlordId, reference, null]
   );
   return { id: result.insertId, reference };
 }
@@ -212,34 +300,41 @@ async function createPendingPayment(connection, { type, amount, phone, propertyI
 /* ══════════════════════════════════════════════════════════════════════════
    AUTH
 ══════════════════════════════════════════════════════════════════════════ */
-app.post('/api/auth/register', async (req, res) => {
-  const { name, email, password, role } = req.body;
+app.post('/api/auth/register', authLimiter, async (req, res) => {
+  const name = trimText(req.body.name, 100);
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || '');
+  const role = req.body.role || 'tenant';
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password are required' });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
+  if (password.length < 10 || password.length > 128) return res.status(400).json({ message: 'Password must be between 10 and 128 characters' });
+  if (!['tenant', 'landlord'].includes(role)) return res.status(400).json({ message: 'Invalid account role' });
   try {
     const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [email]);
     if (existing.length) return res.status(400).json({ message: 'Email already registered' });
 
     const hashed   = await bcrypt.hash(password, 10);
-    const safeRole = ['tenant','landlord','admin'].includes(role) ? role : 'tenant';
+    const safeRole = role;
     const [result] = await db.execute(
       'INSERT INTO users (name, email, password, role, account_status) VALUES (?,?,?,?,?)',
       [name, email, hashed, safeRole, 'active']
     );
-    const token = jwt.sign({ id: result.insertId, role: safeRole }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = signToken({ id: result.insertId, role: safeRole });
     res.status(201).json({ token, user: { id: result.insertId, name, email, role: safeRole } });
   } catch (err) {
     console.error('Register error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to create account' });
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-  const { email, password } = req.body;
+app.post('/api/auth/login', authLimiter, async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || '');
   if (!email || !password)
     return res.status(400).json({ message: 'Email and password are required' });
   try {
-    const [rows] = await executeReadWithRetry('SELECT id, name, email, password, role, account_status FROM users WHERE email = ?', [email.trim().toLowerCase()]);
+    const [rows] = await executeReadWithRetry('SELECT id, name, email, password, role, account_status FROM users WHERE email = ?', [email]);
     if (!rows.length) return res.status(401).json({ message: 'Invalid email or password' });
 
     const user    = rows[0];
@@ -249,23 +344,67 @@ app.post('/api/auth/login', async (req, res) => {
     if (user.account_status === 'suspended')
       return res.status(403).json({ message: 'Account suspended. Contact support.' });
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = signToken(user);
     res.json({
       token,
       user: { id: user.id, name: user.name, email: user.email, role: user.role }
     });
   } catch (err) {
     console.error('Login error:', err);
-    res.status(transientDbErrors.has(err.code) ? 503 : 500).json({ message: transientDbErrors.has(err.code) ? 'Database is temporarily unavailable. Please try again.' : err.message });
+    res.status(transientDbErrors.has(err.code) ? 503 : 500).json({ message: transientDbErrors.has(err.code) ? 'Database is temporarily unavailable. Please try again.' : 'Unable to sign in' });
   }
 });
 
 /* ══════════════════════════════════════════════════════════════════════════
    PUBLIC PROPERTIES
 ══════════════════════════════════════════════════════════════════════════ */
+app.get('/api/users/me', protect, async (req, res) => {
+  try {
+    const [[user]] = await db.execute(
+      'SELECT id, name, email, role, mpesa_number AS phone FROM users WHERE id=? LIMIT 1',
+      [req.user.id],
+    );
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ user });
+  } catch {
+    res.status(500).json({ message: 'Unable to load profile' });
+  }
+});
+
+app.patch('/api/users/me', protect, async (req, res) => {
+  const name = trimText(req.body.name, 100);
+  const email = normalizeEmail(req.body.email);
+  const phone = trimText(req.body.phone, 32);
+  if (!name || !EMAIL_RE.test(email)) return res.status(400).json({ message: 'A name and valid email address are required' });
+  try {
+    const [existing] = await db.execute('SELECT id FROM users WHERE email=? AND id<>? LIMIT 1', [email, req.user.id]);
+    if (existing.length) return res.status(409).json({ message: 'Email already registered' });
+    await db.execute('UPDATE users SET name=?, email=?, mpesa_number=? WHERE id=?', [name, email, phone || null, req.user.id]);
+    res.json({ user: { id: req.user.id, name, email, phone, role: req.user.role } });
+  } catch {
+    res.status(500).json({ message: 'Unable to update profile' });
+  }
+});
+
+app.post('/api/users/me/password', protect, authLimiter, async (req, res) => {
+  const currentPassword = String(req.body.current_password || '');
+  const newPassword = String(req.body.new_password || '');
+  if (!currentPassword || newPassword.length < 10 || newPassword.length > 128) {
+    return res.status(400).json({ message: 'Current password and a new 10–128 character password are required' });
+  }
+  try {
+    const [[user]] = await db.execute('SELECT password FROM users WHERE id=? LIMIT 1', [req.user.id]);
+    if (!user || !await bcrypt.compare(currentPassword, user.password)) return res.status(401).json({ message: 'Current password is incorrect' });
+    await db.execute('UPDATE users SET password=? WHERE id=?', [await bcrypt.hash(newPassword, 10), req.user.id]);
+    res.json({ message: 'Password updated' });
+  } catch {
+    res.status(500).json({ message: 'Unable to update password' });
+  }
+});
+
 app.get('/api/properties', optionalAuth, async (req, res) => {
   try {
-    const { county, town, house_type, bedrooms, minPrice, maxPrice, sort } = req.query;
+    const { county, town, house_type, bedrooms, minPrice, maxPrice, sort, search } = req.query;
     let q = `
       SELECT ${publicFields}
       FROM properties p
@@ -273,20 +412,27 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
     `;
     const params = [];
     if (!isAdmin(req)) q += ` AND p.status = 'available'`;
+    if (search) {
+      q += ' AND (p.title LIKE ? OR p.town LIKE ? OR p.county LIKE ? OR p.house_type LIKE ?)';
+      const searchTerm = `%${trimText(search, 100)}%`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+    }
     if (county)     { q += ' AND p.county = ?';     params.push(county); }
     if (town)       { q += ' AND p.town LIKE ?';     params.push(`%${town}%`); }
     if (house_type) { q += ' AND p.house_type = ?';  params.push(house_type); }
     if (bedrooms)   { q += ' AND p.bedrooms = ?';    params.push(bedrooms); }
     if (minPrice)   { q += ' AND p.price >= ?';      params.push(minPrice); }
     if (maxPrice)   { q += ' AND p.price <= ?';      params.push(maxPrice); }
+    const { page, limit, offset } = pagination(req.query);
     q += sort === 'lowest'  ? ' ORDER BY p.price ASC'
        : sort === 'highest' ? ' ORDER BY p.price DESC'
        : ' ORDER BY p.created_at DESC';
-    const [rows] = await executeReadWithRetry(q, params);
-    res.json(rows);
+    q += ' LIMIT ? OFFSET ?';
+    const [rows] = await executeReadWithRetry(q, [...params, limit, offset]);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('GET /properties error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load properties' });
   }
 });
 
@@ -317,7 +463,7 @@ app.get('/api/properties/:id', optionalAuth, async (req, res) => {
     res.json(safe);
   } catch (err) {
     console.error('Database error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load this property' });
   }
 });
 
@@ -326,8 +472,15 @@ app.get('/api/properties/:id', optionalAuth, async (req, res) => {
 ══════════════════════════════════════════════════════════════════════════ */
 app.get('/api/landlord/dashboard', protect, authorize('landlord'), async (req, res) => {
   try {
+    const [[propertyStats]] = await db.execute(
+      `SELECT COUNT(*) AS total,
+              SUM(verification_status='approved') AS active,
+              SUM(verification_status='pending') AS pending
+       FROM properties WHERE landlord_id = ?`,
+      [req.user.id]
+    );
     const [properties] = await db.execute(
-      'SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC',
+      'SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT 3',
       [req.user.id]
     );
     const [inquiries] = await db.execute(`
@@ -341,12 +494,12 @@ app.get('/api/landlord/dashboard', protect, authorize('landlord'), async (req, r
 
     res.json({
       stats: {
-        total:     properties.length,
-        active:    properties.filter(p => p.verification_status === 'approved').length,
-        pending:   properties.filter(p => p.verification_status === 'pending').length,
+        total:     Number(propertyStats.total || 0),
+        active:    Number(propertyStats.active || 0),
+        pending:   Number(propertyStats.pending || 0),
         inquiries: inquiries.length,
       },
-      properties: properties.slice(0, 3),
+      properties,
       inquiries,
     });
   } catch (err) {
@@ -357,14 +510,15 @@ app.get('/api/landlord/dashboard', protect, authorize('landlord'), async (req, r
 
 app.get('/api/landlord/my-properties', protect, authorize('landlord'), async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(
-      'SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC',
-      [req.user.id]
+      'SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [req.user.id, limit, offset]
     );
-    res.json(rows);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('My-properties error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load properties' });
   }
 });
 
@@ -515,7 +669,8 @@ app.delete('/api/landlord/properties/:id', protect, authorize('landlord'), async
     await db.execute('DELETE FROM properties WHERE id=? AND landlord_id=?', [req.params.id, req.user.id]);
     res.json({ message: 'Property deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Delete property error:', err);
+    res.status(500).json({ message: 'Unable to delete property' });
   }
 });
 
@@ -529,10 +684,10 @@ app.patch('/api/landlord/properties/:id/status', protect, async (req, res) => {
     const [result] = await db.execute(`UPDATE properties SET status=? WHERE ${condition}`, params);
     if (!result.affectedRows) return res.status(404).json({ message: 'Property not found or not yours' });
     res.json({ message: `Property marked ${status}` });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { console.error('Property status error:', err); res.status(500).json({ message: 'Unable to update property status' }); }
 });
 
-app.post('/api/payments/view', optionalAuth, async (req, res) => {
+app.post('/api/payments/view', paymentLimiter, optionalAuth, async (req, res) => {
   const { property_id, phone, email, first_name, last_name, country_code = 'KE' } = req.body;
   if (!property_id || !phone || !email || !first_name || !last_name)
     return res.status(400).json({ message: 'property_id, phone, email, first_name, and last_name are required' });
@@ -540,12 +695,12 @@ app.post('/api/payments/view', optionalAuth, async (req, res) => {
     const [[property]] = await db.execute("SELECT id, title, status, verification_status, payment_status FROM properties WHERE id=?", [property_id]);
     if (!property || property.status !== 'available' || property.verification_status !== 'approved')
       return res.status(409).json({ message: 'This house has been taken or is not available' });
-    const payment = await createPayment({ type: 'view_fee', amount: 40, phone, propertyId: property_id, description: `View fee for property ${property_id}`, billingAddress: { email, firstName: first_name, lastName: last_name, countryCode: country_code } });
+    const payment = await createPayment({ type: 'view_fee', amount: VIEW_FEE_AMOUNT, phone, propertyId: property_id, description: `View fee for property ${property_id}`, billingAddress: { email, firstName: first_name, lastName: last_name, countryCode: country_code }, viewAccessToken: viewAccessToken() });
     res.status(201).json(payment);
   } catch (err) { console.error('[Payments] view-fee order failed:', err); respondPaymentError(res, err); }
 });
 
-app.post('/api/landlord/properties/:id/payment', protect, authorize('landlord'), async (req, res) => {
+app.post('/api/landlord/properties/:id/payment', paymentLimiter, protect, authorize('landlord'), async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ message: 'phone is required' });
   try {
@@ -561,7 +716,7 @@ app.post('/api/landlord/properties/:id/payment', protect, authorize('landlord'),
   } catch (err) { console.error('[Payments] listing-fee order failed:', err); respondPaymentError(res, err); }
 });
 
-app.post('/api/payments/plans', protect, authorize('landlord'), async (req, res) => {
+app.post('/api/payments/plans', paymentLimiter, protect, authorize('landlord'), async (req, res) => {
   const { plan, phone, property_id } = req.body;
   if (!['monthly', 'semester'].includes(plan) || !phone) return res.status(400).json({ message: 'plan and phone are required' });
   try {
@@ -615,12 +770,13 @@ app.get('/api/admin/stats', protect, authorize('admin'), async (req, res) => {
     });
   } catch (err) {
     console.error('Admin stats error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load dashboard statistics' });
   }
 });
 
 app.get('/api/admin/users', protect, authorize('admin'), async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`
       SELECT u.id, u.name, u.email, u.role,
              u.account_status AS status,
@@ -630,11 +786,12 @@ app.get('/api/admin/users', protect, authorize('admin'), async (req, res) => {
       LEFT JOIN properties p ON p.landlord_id = u.id
       GROUP BY u.id
       ORDER BY u.created_at DESC
-    `);
-    res.json(rows);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('Admin users error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load users' });
   }
 });
 
@@ -646,7 +803,8 @@ app.patch('/api/admin/users/:id/status', protect, authorize('admin'), async (req
     await db.execute('UPDATE users SET account_status=? WHERE id=?', [status, req.params.id]);
     res.json({ message: `User ${status}` });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('User status error:', err);
+    res.status(500).json({ message: 'Unable to update user status' });
   }
 });
 
@@ -655,23 +813,26 @@ app.delete('/api/admin/users/:id', protect, authorize('admin'), async (req, res)
     await db.execute('DELETE FROM users WHERE id=?', [req.params.id]);
     res.json({ message: 'User deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Delete user error:', err);
+    res.status(500).json({ message: 'Unable to delete user' });
   }
 });
 
 app.get('/api/admin/listings', protect, authorize('admin'), async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`
       SELECT p.*, u.name AS landlord,
              DATE_FORMAT(p.created_at,'%Y-%m-%d') AS created_at
       FROM properties p
       LEFT JOIN users u ON u.id = p.landlord_id
       ORDER BY p.created_at DESC
-    `);
-    res.json(rows);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('Admin listings error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load listings' });
   }
 });
 
@@ -684,7 +845,8 @@ app.patch('/api/admin/listings/:id/status', protect, authorize('admin'), async (
     await db.execute('UPDATE properties SET verification_status=? WHERE id=?', [vs, req.params.id]);
     res.json({ message: 'Listing updated' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Listing status error:', err);
+    res.status(500).json({ message: 'Unable to update listing status' });
   }
 });
 
@@ -694,7 +856,7 @@ app.patch('/api/admin/listings/:id/payment-status', protect, authorize('admin'),
   try {
     await db.execute('UPDATE properties SET payment_status=? WHERE id=?', [payment_status, req.params.id]);
     res.json({ message: 'Payment status updated' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { console.error('Listing payment status error:', err); res.status(500).json({ message: 'Unable to update payment status' }); }
 });
 
 app.delete('/api/admin/listings/:id', protect, authorize('admin'), async (req, res) => {
@@ -702,7 +864,8 @@ app.delete('/api/admin/listings/:id', protect, authorize('admin'), async (req, r
     await db.execute('DELETE FROM properties WHERE id=?', [req.params.id]);
     res.json({ message: 'Listing deleted' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Delete listing error:', err);
+    res.status(500).json({ message: 'Unable to delete listing' });
   }
 });
 
@@ -723,20 +886,24 @@ app.post('/api/favorites', protect, async (req, res) => {
     await db.execute('INSERT INTO favorites (user_id,property_id) VALUES (?,?)', [req.user.id, property_id]);
     res.json({ favorited: true });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Favorites update error:', err);
+    res.status(500).json({ message: 'Unable to update favorites' });
   }
 });
 
 app.get('/api/favorites', protect, async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`
       SELECT p.* FROM favorites f
       JOIN properties p ON f.property_id = p.id
       WHERE f.user_id = ? AND p.payment_status='paid' AND p.status='available'
-    `, [req.user.id]);
-    res.json(rows);
+      ORDER BY f.id DESC LIMIT ? OFFSET ?
+    `, [req.user.id, limit, offset]);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('GET /favorites error:', err);
+    res.status(500).json({ message: 'Unable to load favorites' });
   }
 });
 
@@ -744,17 +911,18 @@ app.get('/api/favorites', protect, async (req, res) => {
    INQUIRIES
 ══════════════════════════════════════════════════════════════════════════ */
 app.post('/api/inquiries', async (req, res) => {
-  const { property_id, user_name, user_email, message, phone, payment_id } = req.body;
-  if (!property_id || !user_name || !user_email || !message || !phone)
-    return res.status(400).json({ message: 'property_id, user_name, user_email, phone and message are required' });
+  const { property_id, user_name, user_email, message } = req.body;
+  const accessToken = String(req.headers['x-view-access-token'] || '');
+  if (!property_id || !user_name || !user_email || !message || accessToken.length < 32)
+    return res.status(400).json({ message: 'property_id, user_name, user_email, message, and a valid view access token are required' });
   try {
     const [[property]] = await db.execute('SELECT status FROM properties WHERE id=?', [property_id]);
     if (!property) return res.status(404).json({ message: 'Property not found' });
     if (property.status === 'taken') return res.status(409).json({ message: 'This house has been taken' });
     const [payments] = await db.execute(
-      `SELECT id FROM payments WHERE type='view_fee' AND amount=? AND status='success' AND related_property_id=? AND payer_phone=?
-       AND (? IS NULL OR id=?) ORDER BY id DESC LIMIT 1`,
-       [Number(process.env.VIEW_FEE_AMOUNT || 40), property_id, phone, payment_id || null, payment_id || null]
+      `SELECT id FROM payments WHERE type='view_fee' AND amount=? AND status='success' AND related_property_id=? AND view_access_token_hash=?
+       ORDER BY id DESC LIMIT 1`,
+       [VIEW_FEE_AMOUNT, property_id, tokenHash(accessToken)]
     );
     if (!payments.length) return res.status(402).json({ message: 'A successful KSh 40 view payment is required first' });
     await db.execute(
@@ -764,23 +932,38 @@ app.post('/api/inquiries', async (req, res) => {
     res.status(201).json({ message: 'Inquiry sent successfully' });
   } catch (err) {
     console.error('POST /inquiries error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to send inquiry' });
   }
 });
 
 app.get('/api/landlord/inquiries', protect, authorize('landlord'), async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`
       SELECT i.*, p.title AS property_title
       FROM inquiries i
       JOIN properties p ON i.property_id = p.id
       WHERE p.landlord_id = ?
       ORDER BY i.created_at DESC
-    `, [req.user.id]);
-    res.json(rows);
+      LIMIT ? OFFSET ?
+    `, [req.user.id, limit, offset]);
+    res.json(paginated(rows, page, limit));
   } catch (err) {
     console.error('GET /landlord/inquiries error:', err);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: 'Unable to load inquiries' });
+  }
+});
+
+app.delete('/api/landlord/inquiries/:id', protect, authorize('landlord'), async (req, res) => {
+  try {
+    const [result] = await db.execute(`DELETE i FROM inquiries i
+      JOIN properties p ON p.id=i.property_id
+      WHERE i.id=? AND p.landlord_id=?`, [req.params.id, req.user.id]);
+    if (!result.affectedRows) return res.status(404).json({ message: 'Inquiry not found' });
+    res.json({ message: 'Inquiry deleted' });
+  } catch (err) {
+    console.error('DELETE /landlord/inquiries error:', err);
+    res.status(500).json({ message: 'Unable to delete inquiry' });
   }
 });
 
@@ -850,11 +1033,12 @@ app.post('/api/admin/payments/register-ipn', protect, authorize('admin'), async 
 
 app.get('/api/admin/payments', protect, authorize('admin'), async (req, res) => {
   try {
+    const { page, limit, offset } = pagination(req.query);
     const [rows] = await db.execute(`SELECT p.*, pr.title AS property_title, u.name AS landlord_name
       FROM payments p LEFT JOIN properties pr ON pr.id=p.related_property_id LEFT JOIN users u ON u.id=p.related_landlord_id
-      ORDER BY p.created_at DESC`);
-    res.json(rows);
-  } catch (err) { res.status(500).json({ message: err.message }); }
+      ORDER BY p.created_at DESC LIMIT ? OFFSET ?`, [limit, offset]);
+    res.json(paginated(rows, page, limit));
+  } catch (err) { console.error('Admin payments error:', err); res.status(500).json({ message: 'Unable to load payments' }); }
 });
 
 app.patch('/api/admin/payments/:id/resolve', protect, authorize('admin'), async (req, res) => {
@@ -870,12 +1054,15 @@ app.patch('/api/admin/payments/:id/resolve', protect, authorize('admin'), async 
       if (payment.related_property_id) await db.execute("UPDATE properties SET payment_status='paid' WHERE id=?", [payment.related_property_id]);
     }
     res.json({ message: 'Payment resolved' });
-  } catch (err) { res.status(500).json({ message: err.message }); }
+  } catch (err) { console.error('Payment resolution error:', err); res.status(500).json({ message: 'Unable to resolve payment' }); }
 });
 
 app.get('/api/admin/inquiries', protect, authorize('admin'), async (req, res) => {
-  try { const [rows] = await db.execute('SELECT i.*, p.title AS property_title FROM inquiries i JOIN properties p ON p.id=i.property_id ORDER BY i.created_at DESC'); res.json(rows); }
-  catch (err) { res.status(500).json({ message: err.message }); }
+  try {
+    const { page, limit, offset } = pagination(req.query);
+    const [rows] = await db.execute('SELECT i.*, p.title AS property_title FROM inquiries i JOIN properties p ON p.id=i.property_id ORDER BY i.created_at DESC LIMIT ? OFFSET ?', [limit, offset]);
+    res.json(paginated(rows, page, limit));
+  } catch (err) { console.error('Admin inquiries error:', err); res.status(500).json({ message: 'Unable to load inquiries' }); }
 });
 
 expirePlans().catch(err => console.error('Plan expiry error:', err.message));

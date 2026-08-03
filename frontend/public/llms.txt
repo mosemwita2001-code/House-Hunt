@@ -1,0 +1,6 @@
+# Keja Hunt
+
+Keja Hunt is a Kenyan rental-property discovery service. Visitors can browse verified property listings, and registered landlords can create and manage listings.
+
+Public pages: `/`, `/property/:id`, `/login`, `/register`.
+Private pages: `/favorites`, `/landlord`, `/admin`.

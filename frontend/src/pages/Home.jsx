@@ -43,6 +43,7 @@ export default function Home() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [search, setSearch]           = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [houseType, setHouseType]     = useState('');
   const [county, setCounty]           = useState('');
   const [minPrice, setMinPrice]       = useState('');
@@ -50,16 +51,22 @@ export default function Home() {
   const [sortBy, setSortBy]           = useState('newest');
   const [showFilters, setShowFilters] = useState(false);
   const [hoveredId, setHoveredId]     = useState(null);
+  const [page, setPage]               = useState(1);
+  const [pagination, setPagination]   = useState({ page: 1, limit: 24, hasMore: false });
   const heroRef = useRef(null);
 
   useEffect(() => {
     const fetchProperties = async () => {
       try {
         setLoading(true);
-        const response = await API.get('/properties');
-        const data = Array.isArray(response.data) ? response.data : [];
+        const response = await API.get('/properties', { params: {
+          page, limit: 24, search, house_type: houseType, county,
+          minPrice, maxPrice, sort: sortBy,
+        } });
+        const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
         setProperties(data);
         setFiltered(data);
+        setPagination(response.data?.pagination || { page, limit: 24, hasMore: data.length === 24 });
         setError(null);
       } catch (err) {
         console.error("Fetch error:", err);
@@ -69,32 +76,14 @@ export default function Home() {
       }
     };
     fetchProperties();
-  }, []);
+  }, [page, search, houseType, county, minPrice, maxPrice, sortBy]);
 
-  useEffect(() => {
-    let result = [...properties];
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(p =>
-        p.title?.toLowerCase().includes(q) ||
-        p.town?.toLowerCase().includes(q) ||
-        p.county?.toLowerCase().includes(q) ||
-        p.house_type?.toLowerCase().includes(q)
-      );
-    }
-    if (houseType) result = result.filter(p => p.house_type === houseType);
-    if (county)    result = result.filter(p => p.county === county);
-    if (minPrice)  result = result.filter(p => Number(p.price) >= Number(minPrice));
-    if (maxPrice)  result = result.filter(p => Number(p.price) <= Number(maxPrice));
-    if (sortBy === 'lowest')  result.sort((a, b) => Number(a.price) - Number(b.price));
-    if (sortBy === 'highest') result.sort((a, b) => Number(b.price) - Number(a.price));
-    if (sortBy === 'newest')  result.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    setFiltered(result);
-  }, [search, houseType, county, minPrice, maxPrice, sortBy, properties]);
+  useEffect(() => { setPage(1); }, [search, houseType, county, minPrice, maxPrice, sortBy]);
 
   const clearFilters = () => {
-    setSearch(''); setHouseType(''); setCounty('');
+    setSearch(''); setSearchInput(''); setHouseType(''); setCounty('');
     setMinPrice(''); setMaxPrice(''); setSortBy('newest');
+    setPage(1);
   };
 
   const hasFilters = search || houseType || county || minPrice || maxPrice || sortBy !== 'newest';
@@ -163,8 +152,10 @@ backgroundPosition: 'center',
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
             </svg>
             <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              id="home-search"
+              aria-label="Search properties"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
               placeholder="Search by location, title or house type..."
               style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 15, color: '#1f2937', fontFamily: 'inherit' }}
             />
@@ -185,6 +176,8 @@ backgroundPosition: 'center',
               Filters {hasFilters && <span style={{ background: '#eab308', color: '#1a1a2e', borderRadius: '50%', width: 16, height: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>!</span>}
             </button>
             <button
+              type="button"
+              onClick={() => { setSearch(searchInput.trim()); setPage(1); }}
               style={{
                 background: 'linear-gradient(135deg, #1a1a2e, #0f3460)',
                 color: 'white', border: 'none', borderRadius: 14,
@@ -221,8 +214,8 @@ backgroundPosition: 'center',
           <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>
             {/* House Type */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>HOUSE TYPE</label>
-              <select value={houseType} onChange={e => setHouseType(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
+              <label htmlFor="filter-house-type" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>HOUSE TYPE</label>
+              <select id="filter-house-type" aria-label="House type" value={houseType} onChange={e => setHouseType(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
                 <option value="">All Types</option>
                 {HOUSE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -230,8 +223,8 @@ backgroundPosition: 'center',
 
             {/* County */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>COUNTY</label>
-              <select value={county} onChange={e => setCounty(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
+              <label htmlFor="filter-county" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>COUNTY</label>
+              <select id="filter-county" aria-label="County" value={county} onChange={e => setCounty(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
                 <option value="">All Counties</option>
                 {COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -239,20 +232,20 @@ backgroundPosition: 'center',
 
             {/* Min Price */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>MIN PRICE (KES)</label>
-              <input type="number" placeholder="e.g. 5000" value={minPrice} onChange={e => setMinPrice(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', fontFamily: 'inherit' }} />
+              <label htmlFor="filter-min-price" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>MIN PRICE (KES)</label>
+              <input id="filter-min-price" aria-label="Minimum price" type="number" placeholder="e.g. 5000" value={minPrice} onChange={e => setMinPrice(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', fontFamily: 'inherit' }} />
             </div>
 
             {/* Max Price */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>MAX PRICE (KES)</label>
-              <input type="number" placeholder="e.g. 50000" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', fontFamily: 'inherit' }} />
+              <label htmlFor="filter-max-price" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>MAX PRICE (KES)</label>
+              <input id="filter-max-price" aria-label="Maximum price" type="number" placeholder="e.g. 50000" value={maxPrice} onChange={e => setMaxPrice(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', fontFamily: 'inherit' }} />
             </div>
 
             {/* Sort */}
             <div>
-              <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>SORT BY</label>
-              <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
+              <label htmlFor="filter-sort" style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#6b7280', marginBottom: 6, letterSpacing: '0.06em' }}>SORT BY</label>
+              <select id="filter-sort" aria-label="Sort properties" value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #e5e7eb', borderRadius: 10, fontSize: 13, color: '#1f2937', background: 'white', fontFamily: 'inherit', cursor: 'pointer' }}>
                 <option value="newest">Newest First</option>
                 <option value="lowest">Price: Low to High</option>
                 <option value="highest">Price: High to Low</option>
@@ -452,6 +445,14 @@ backgroundPosition: 'center',
               );
             })}
           </div>
+        )}
+
+        {!loading && (page > 1 || pagination.hasMore) && (
+          <nav aria-label="Property results pages" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 32 }}>
+            <button type="button" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: page === 1 ? '#f3f4f6' : 'white', color: '#374151', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Previous</button>
+            <span style={{ color: '#6b7280', fontSize: 13 }}>Page {page}</span>
+            <button type="button" disabled={!pagination.hasMore} onClick={() => setPage(current => current + 1)} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #1a1a2e', background: pagination.hasMore ? '#1a1a2e' : '#f3f4f6', color: pagination.hasMore ? 'white' : '#9ca3af', cursor: pagination.hasMore ? 'pointer' : 'not-allowed' }}>Next</button>
+          </nav>
         )}
       </main>
 

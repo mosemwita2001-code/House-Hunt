@@ -10,6 +10,7 @@ const Register = lazy(() => import('./pages/Register'));
 const PropertyDetails = lazy(() => import('./pages/propertyDetails'));
 const LandlordDashboard = lazy(() => import('./pages/LandlordDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const Favorites = lazy(() => import('./pages/Favorites'));
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
           <Route path="/property/:id" element={<PropertyDetails />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
           
           {/* 2. ADD THE ADMIN ROUTE */}
           <Route 

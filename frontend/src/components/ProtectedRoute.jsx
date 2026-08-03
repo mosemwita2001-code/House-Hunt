@@ -1,9 +1,15 @@
-import { useContext } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useContext, useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 
 export default function ProtectedRoute({ children, roleRequired }) {
   const { user } = useContext(AuthContext);
+  const location = useLocation();
+
+  useEffect(() => {
+    const robots = document.querySelector('meta[name="robots"]');
+    if (robots) robots.content = location.pathname === '/admin' || location.pathname === '/landlord' ? 'noindex,nofollow,noarchive' : 'index,follow';
+  }, [location.pathname]);
 
   // 1. If not logged in, redirect to login
   if (!user) {

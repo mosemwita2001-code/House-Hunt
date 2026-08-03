@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import {
   LayoutDashboard, Home, PlusSquare, MessageSquare, User, LogOut,
@@ -61,7 +61,7 @@ function ToastItem({ toast, onRemove }) {
     <div style={{ background: TOAST_BG[toast.type], border: `1px solid ${TOAST_BORDER[toast.type]}`, borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 10 }}>
       <Icon size={15} color={TOAST_BORDER[toast.type]} style={{ marginTop: 1, flexShrink: 0 }} />
       <p style={{ fontSize: 13, color: "white", flex: 1, lineHeight: 1.4, margin: 0 }}>{toast.message}</p>
-      <button onClick={() => onRemove(toast.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", padding: 0, flexShrink: 0 }}><X size={13} /></button>
+      <button type="button" aria-label="Dismiss notification" onClick={() => onRemove(toast.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.7)", padding: 0, flexShrink: 0 }}><X size={13} aria-hidden="true" /></button>
     </div>
   );
 }
@@ -85,7 +85,7 @@ const onBlur  = (e) => (e.target.style.borderColor = "rgba(255,255,255,0.08)");
 const STATUS_STYLE = {
   active:   { background: "rgba(16,185,129,0.12)",  color: "#34d399",                border: "1px solid rgba(16,185,129,0.25)"  },
   pending:  { background: "rgba(245,158,11,0.12)",  color: "#fbbf24",                border: "1px solid rgba(245,158,11,0.25)"  },
-  inactive: { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.4)",  border: "1px solid rgba(255,255,255,0.1)"  },
+  inactive: { background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.75)",  border: "1px solid rgba(255,255,255,0.1)"  },
   rejected: { background: "rgba(239,68,68,0.1)",    color: "#f87171",                border: "1px solid rgba(239,68,68,0.2)"    },
 };
 
@@ -108,7 +108,7 @@ function StatCard({ label, value, icon, color = "violet", loading }) {
   return (
     <div style={{ background: a.bg, border: `1px solid ${a.border}`, borderRadius: 18, padding: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>{label}</p>
+        <p style={{ fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>{label}</p>
         <span style={{ fontSize: 18 }}>{icon}</span>
       </div>
       <p style={{ fontSize: 30, fontWeight: 800, color: "white", margin: 0 }}>{value ?? "—"}</p>
@@ -117,7 +117,7 @@ function StatCard({ label, value, icon, color = "violet", loading }) {
 }
 
 // ─── Property card ────────────────────────────────────────────────────────────
-function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
+function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView }) {
   const ss = property.status === "taken" ? STATUS_STYLE.inactive : STATUS_STYLE.active;
   return (
     <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, overflow: "hidden" }}>
@@ -131,15 +131,15 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
       </div>
       <div style={{ padding: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, color: "white", margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{property.title}</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.4)", fontSize: 11, marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, color: "rgba(255,255,255,0.75)", fontSize: 11, marginBottom: 12 }}>
           <MapPin size={11} /><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{property.town}, {property.county}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 11, color: "rgba(255,255,255,0.75)", marginBottom: 14 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Bed size={12} />{property.bedrooms} bed</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Bath size={12} />{property.bathrooms} bath</span>
           <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
             KSh {Number(property.price).toLocaleString()}
-            <span style={{ fontWeight: 400, color: "rgba(255,255,255,0.3)", fontSize: 11 }}>/{property.rentPeriod === "semester" ? "sem" : "mo"}</span>
+            <span style={{ fontWeight: 400, color: "rgba(255,255,255,0.75)", fontSize: 11 }}>/{property.rentPeriod === "semester" ? "sem" : "mo"}</span>
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
@@ -147,14 +147,14 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
           <button onClick={() => onToggle(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: "pointer" }}>
             Mark {property.status === "taken" ? "Available" : "Taken"}
           </button>
-          <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.5)", cursor: "pointer" }}>
+          <button type="button" onClick={() => onView(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.8)", cursor: "pointer" }}>
             <Eye size={12} /> View
           </button>
           <button onClick={() => onEdit(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.2)", color: "#a78bfa", cursor: "pointer" }}>
             <Edit2 size={12} /> Edit
           </button>
-          <button onClick={() => onDelete(property.id)} style={{ padding: "8px 12px", borderRadius: 10, fontSize: 11, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "#f87171", cursor: "pointer" }}>
-            <Trash2 size={12} />
+          <button type="button" aria-label={`Delete ${property.title}`} onClick={() => onDelete(property.id)} style={{ padding: "8px 12px", borderRadius: 10, fontSize: 11, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)", color: "#f87171", cursor: "pointer" }}>
+            <Trash2 size={12} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -164,21 +164,53 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry }) {
 
 // ─── Confirm modal ────────────────────────────────────────────────────────────
 function ConfirmModal({ open, title, message, onConfirm, onCancel, loading }) {
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const modalRoot = modalRef.current?.parentElement;
+    const previousFocus = document.activeElement;
+    const backgroundNodes = modalRoot ? Array.from(modalRoot.children).filter(node => node !== modalRef.current) : [];
+    backgroundNodes.forEach(node => node.setAttribute('inert', ''));
+    const focusable = () => Array.from(modalRef.current?.querySelectorAll('button:not([disabled])') || []);
+    focusable()[0]?.focus();
+    const onKeyDown = event => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      backgroundNodes.forEach(node => node.removeAttribute('inert'));
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [open, onCancel]);
+
   if (!open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }} />
+    <div ref={modalRef} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <button type="button" aria-label="Close dialog" onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", border: 0 }} />
       <div style={{ position: "relative", background: "#131326", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 20, padding: 24, maxWidth: 380, width: "100%", boxShadow: "0 25px 60px rgba(0,0,0,0.5)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <AlertTriangle size={18} color="#f87171" />
           </div>
-          <h3 style={{ color: "white", fontWeight: 700, fontSize: 16, margin: 0 }}>{title}</h3>
+          <h3 id="confirm-modal-title" style={{ color: "white", fontWeight: 700, fontSize: 16, margin: 0 }}>{title}</h3>
         </div>
-        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>{message}</p>
+        <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.6, marginBottom: 20 }}>{message}</p>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-          <button onClick={onConfirm} disabled={loading} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", borderRadius: 12, border: "none", background: "#dc2626", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
+          <button type="button" onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button type="button" onClick={onConfirm} disabled={loading} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", borderRadius: 12, border: "none", background: "#dc2626", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
             {loading && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />} Delete
           </button>
         </div>
@@ -193,11 +225,12 @@ const HOUSE_TYPES = ["Bedsitter","Single Room","One Bedroom","Two Bedroom","Thre
 const AMENITIES_LIST = ["Wi-Fi","Parking","Security","CCTV","Swimming Pool","Gym","Elevator","Backup Power","Water 24/7","Furnished","Balcony","Garden","Laundry","Air Conditioning","Servants Quarters"];
 
 // Field wrapper — defined OUTSIDE every component so it's never recreated
-function Field({ label, error, children }) {
+function Field({ label, id, error, children }) {
+  const fieldId = id || `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
     <div>
-      <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>{label}</label>
-      {children}
+      <label htmlFor={fieldId} style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 6 }}>{label}</label>
+      {React.cloneElement(children, { id: children.props.id || fieldId, 'aria-invalid': error ? 'true' : undefined })}
       {error && <p style={{ fontSize: 11, color: "#f87171", marginTop: 4 }}>{error}</p>}
     </div>
   );
@@ -223,6 +256,9 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
   const [newImages, setNewImages] = useState([]);
   const [errors,    setErrors]   = useState({});
   const fileRef = useRef();
+  const objectUrls = useRef(new Set());
+
+  useEffect(() => () => { objectUrls.current.forEach(URL.revokeObjectURL); }, []);
 
   // Stable setter — never causes child re-renders via new function references
   const set = useCallback((k, v) => setForm(p => ({ ...p, [k]: v })), []);
@@ -233,11 +269,21 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
 
   const handleFiles = (e) => {
     const files = Array.from(e.target.files);
+    const urls = files.map(file => {
+      const url = URL.createObjectURL(file);
+      objectUrls.current.add(url);
+      return url;
+    });
     setNewImages(p => [...p, ...files].slice(0, 10));
-    setPreviews(p => [...p, ...files.map(f => URL.createObjectURL(f))].slice(0, 10));
+    setPreviews(p => [...p, ...urls].slice(0, 10));
+    e.target.value = '';
   };
   const removeImg = (i) => {
-    setPreviews(p => p.filter((_, idx) => idx !== i));
+    setPreviews(p => {
+      const url = p[i];
+      if (objectUrls.current.delete(url)) URL.revokeObjectURL(url);
+      return p.filter((_, idx) => idx !== i);
+    });
     setNewImages(p => p.filter((_, idx) => idx !== i));
   };
 
@@ -283,14 +329,14 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       {/* Image upload */}
       <div>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.45)", marginBottom: 8 }}>
-          Property Images <span style={{ color: "rgba(255,255,255,0.2)" }}>(up to 10)</span>
+        <label htmlFor="property-images" style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 8 }}>
+          Property Images <span style={{ color: "rgba(255,255,255,0.75)" }}>(up to 10)</span>
         </label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {previews.map((src, i) => (
             <div key={i} style={{ position: "relative", width: 76, height: 76, borderRadius: 12, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
               <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              <button type="button" onClick={() => removeImg(i)}
+              <button type="button" aria-label={`Remove image ${i + 1}`} onClick={() => removeImg(i)}
                 style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", border: "none", cursor: "pointer", opacity: 0 }}
                 onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0")}>
                 <X size={16} color="white" />
@@ -298,88 +344,88 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
             </div>
           ))}
           {previews.length < 10 && (
-            <button type="button" onClick={() => fileRef.current.click()}
+              <button type="button" aria-label="Add property images" onClick={() => fileRef.current.click()}
               style={{ width: 76, height: 76, borderRadius: 12, border: "2px dashed rgba(255,255,255,0.12)", background: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, color: "rgba(255,255,255,0.3)" }}>
               <Upload size={16} /><span style={{ fontSize: 10 }}>Add</span>
             </button>
           )}
         </div>
-        <input ref={fileRef} type="file" multiple accept="image/*" onChange={handleFiles} style={{ display: "none" }} />
+        <input id="property-images" ref={fileRef} type="file" multiple accept="image/*" onChange={handleFiles} style={{ display: "none" }} />
       </div>
 
       {/* Two-column grid */}
       <div className="landlord-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Property Title *" error={errors.title}>
+        <Field id="property-title" label="Property Title *" error={errors.title}>
             <input style={inputStyle} value={form.title} onChange={e => set("title", e.target.value)}
               onFocus={onFocus} onBlur={onBlur} placeholder="e.g. Modern 2BR in Kilimani" />
           </Field>
         </div>
 
-        <Field label="Monthly Rent (KSh) *" error={errors.price}>
+        <Field id="property-price" label="Monthly Rent (KSh) *" error={errors.price}>
           <input style={inputStyle} type="number" value={form.price} onChange={e => set("price", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="25000" />
         </Field>
 
-        <Field label="Deposit (KSh)">
+        <Field id="property-deposit" label="Deposit (KSh)">
           <input style={inputStyle} type="number" value={form.deposit} onChange={e => set("deposit", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="50000" />
         </Field>
 
-        <Field label="County *" error={errors.county}>
+        <Field id="property-county" label="County *" error={errors.county}>
           <select style={sel} value={form.county} onChange={e => set("county", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="">Select county</option>
             {COUNTIES.map(c => <option key={c} value={c} style={{ background: "#1a1a2e" }}>{c}</option>)}
           </select>
         </Field>
 
-        <Field label="Town / Area *" error={errors.town}>
+        <Field id="property-town" label="Town / Area *" error={errors.town}>
           <input style={inputStyle} value={form.town} onChange={e => set("town", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="e.g. Westlands" />
         </Field>
 
-        <Field label="House Type *" error={errors.house_type}>
+        <Field id="property-house-type" label="House Type *" error={errors.house_type}>
           <select style={sel} value={form.house_type} onChange={e => set("house_type", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="">Select type</option>
             {HOUSE_TYPES.map(h => <option key={h} value={h} style={{ background: "#1a1a2e" }}>{h}</option>)}
           </select>
         </Field>
 
-        <Field label="Status">
+        <Field id="property-status" label="Status">
           <select style={sel} value={form.status} onChange={e => set("status", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="available" style={{ background: "#1a1a2e" }}>Available</option>
             <option value="taken"     style={{ background: "#1a1a2e" }}>Taken</option>
           </select>
         </Field>
 
-        <Field label="Bedrooms">
+        <Field id="property-bedrooms" label="Bedrooms">
           <input style={inputStyle} type="number" min="0" max="20" value={form.bedrooms}
             onChange={e => set("bedrooms", e.target.value)} onFocus={onFocus} onBlur={onBlur} />
         </Field>
 
-        <Field label="Bathrooms">
+        <Field id="property-bathrooms" label="Bathrooms">
           <input style={inputStyle} type="number" min="0" max="20" value={form.bathrooms}
             onChange={e => set("bathrooms", e.target.value)} onFocus={onFocus} onBlur={onBlur} />
         </Field>
 
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Description *" error={errors.description}>
+          <Field id="property-description" label="Description *" error={errors.description}>
             <textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={form.description}
               onChange={e => set("description", e.target.value)} onFocus={onFocus} onBlur={onBlur}
               placeholder="Describe the property in detail..." />
           </Field>
         </div>
 
-          <Field label="Phone Number *" error={errors.phoneNumber}>
+          <Field id="property-phone" label="Phone Number *" error={errors.phoneNumber}>
           <input style={inputStyle} value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="+254712345678" />
           </Field>
 
-        <Field label="M-Pesa Number (for listing payment)">
+        <Field id="property-mpesa" label="M-Pesa Number (for listing payment)">
           <input style={inputStyle} value={form.mpesa_number || ""} onChange={e => set("mpesa_number", e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="0712345678" />
         </Field>
 
-        <Field label="Rent Period">
+        <Field id="property-rent-period" label="Rent Period">
           <select style={sel} value={form.rentPeriod} onChange={e => set("rentPeriod", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="month"    style={{ background: "#1a1a2e" }}>Per Month</option>
             <option value="semester" style={{ background: "#1a1a2e" }}>Per Semester</option>
@@ -389,14 +435,14 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
 
       {/* Amenities */}
       <div>
-        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.45)", marginBottom: 8 }}>Amenities</label>
+        <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 8 }}>Amenities</label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {AMENITIES_LIST.map(a => (
             <button type="button" key={a} onClick={() => toggleAmenity(a)}
               style={{ padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 500, cursor: "pointer", transition: "all 0.15s",
                 background:   form.amenities.includes(a) ? "rgba(124,58,237,0.2)" : "rgba(255,255,255,0.03)",
                 border:       `1px solid ${form.amenities.includes(a) ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.08)"}`,
-                color:        form.amenities.includes(a) ? "#c4b5fd" : "rgba(255,255,255,0.4)",
+                color:        form.amenities.includes(a) ? "#c4b5fd" : "rgba(255,255,255,0.75)",
               }}>
               {a}
             </button>
@@ -408,7 +454,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
       <div className="landlord-form-actions" style={{ display: "flex", justifyContent: "flex-end", gap: 10, paddingTop: 4 }}>
         {onCancel && (
           <button type="button" onClick={onCancel}
-            style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            style={{ padding: "10px 20px", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.85)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             Cancel
           </button>
         )}
@@ -438,7 +484,7 @@ function Overview({ addToast, onNavigate, user }) {
       })
       .catch(() => addToast("Could not load dashboard", "error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [addToast]);
 
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -448,7 +494,7 @@ function Overview({ addToast, onNavigate, user }) {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 22 }}>
         <div>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", marginBottom: 4 }}>{greeting} 👋</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginBottom: 4 }}>{greeting} 👋</p>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: "white", margin: 0 }}>{user?.name || "Landlord"}</h1>
         </div>
         <button onClick={() => onNavigate("add")}
@@ -476,7 +522,7 @@ function Overview({ addToast, onNavigate, user }) {
             </button>
           </div>
           {loading ? [1,2,3].map(i => <div key={i} style={{ height: 54, background: "rgba(255,255,255,0.04)", borderRadius: 10, marginBottom: 8 }} />)
-          : props.length === 0 ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center", padding: "24px 0" }}>No properties yet</p>
+          : props.length === 0 ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", textAlign: "center", padding: "24px 0" }}>No properties yet</p>
           : props.map(p => (
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.04)", marginBottom: 8 }}>
               <div style={{ width: 42, height: 42, borderRadius: 10, overflow: "hidden", flexShrink: 0, background: "rgba(255,255,255,0.05)" }}>
@@ -484,7 +530,7 @@ function Overview({ addToast, onNavigate, user }) {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 12, fontWeight: 600, color: "white", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.title}</p>
-                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: 0 }}>{p.town}, {p.county}</p>
+                <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0 }}>{p.town}, {p.county}</p>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
                 <p style={{ fontSize: 12, fontWeight: 700, color: "#a78bfa", margin: 0 }}>KSh {Number(p.price).toLocaleString()}</p>
@@ -503,11 +549,11 @@ function Overview({ addToast, onNavigate, user }) {
             </button>
           </div>
           {loading ? [1,2,3].map(i => <div key={i} style={{ height: 48, background: "rgba(255,255,255,0.04)", borderRadius: 10, marginBottom: 8 }} />)
-          : inqs.length === 0 ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", textAlign: "center", padding: "24px 0" }}>No inquiries yet</p>
+          : inqs.length === 0 ? <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", textAlign: "center", padding: "24px 0" }}>No inquiries yet</p>
           : inqs.map(q => (
             <div key={q.id} style={{ padding: "10px 12px", borderRadius: 12, background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.04)", marginBottom: 8 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: "white", margin: "0 0 2px" }}>{q.user_name}</p>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{q.message}</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.8)", margin: 0, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{q.message}</p>
             </div>
           ))}
         </div>
@@ -527,16 +573,18 @@ function MyProperties({ addToast, onNavigate }) {
   const [editTarget,   setEditTarget]   = useState(null);
   const [saving,       setSaving]       = useState(false);
   const [retryPayment, setRetryPayment] = useState({ property: null, phone: "", error: "" });
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, hasMore: false });
 
-  const loadProperties = useCallback(() => {
+  const loadProperties = useCallback((requestedPage = page) => {
     setLoading(true);
-    API.get("/landlord/my-properties")
-      .then(({ data }) => setProperties((data || []).map(normalizeProperty)))
+    API.get("/landlord/my-properties", { params: { page: requestedPage, limit: 24 } })
+      .then(({ data }) => { const rows = data?.data || data || []; setProperties(rows.map(normalizeProperty)); setPagination(data?.pagination || { page: requestedPage, hasMore: rows.length === 24 }); })
       .catch(() => addToast("Could not load your properties", "error"))
       .finally(() => setLoading(false));
-  }, [addToast]);
+  }, [addToast, page]);
 
-  useEffect(() => { loadProperties(); }, [loadProperties]);
+  useEffect(() => { loadProperties(page); }, [loadProperties, page]);
 
   const filtered = properties.filter(p => {
     const ms = statusFilter === "all" || p.status === statusFilter;
@@ -607,13 +655,13 @@ function MyProperties({ addToast, onNavigate }) {
   if (editTarget) return (
     <div style={{ maxWidth: 700 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <button onClick={() => setEditTarget(null)}
+          <button type="button" aria-label="Back to properties" onClick={() => setEditTarget(null)}
           style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
           <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
         </button>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "white", margin: 0 }}>Edit Property</h1>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>Update your listing details</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>Update your listing details</p>
         </div>
       </div>
       <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
@@ -627,7 +675,7 @@ function MyProperties({ addToast, onNavigate }) {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "white", margin: 0 }}>My Properties</h1>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>{properties.length} total listings</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 4 }}>{properties.length} total listings</p>
         </div>
         <button onClick={() => onNavigate("add")}
           style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 18px", borderRadius: 12, background: "#7c3aed", border: "none", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -639,7 +687,8 @@ function MyProperties({ addToast, onNavigate }) {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
           <Search size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "rgba(255,255,255,0.3)" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search properties…"
+        <label htmlFor="my-properties-search" className="sr-only">Search properties</label>
+        <input id="my-properties-search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search properties…"
             style={{ ...inputStyle, paddingLeft: 34 }} onFocus={onFocus} onBlur={onBlur} />
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -648,7 +697,7 @@ function MyProperties({ addToast, onNavigate }) {
               style={{ padding: "8px 12px", borderRadius: 10, fontSize: 11, fontWeight: 600, cursor: "pointer", textTransform: "capitalize",
                 border:      `1px solid ${statusFilter === s ? "rgba(124,58,237,0.4)" : "rgba(255,255,255,0.07)"}`,
                 background:  statusFilter === s ? "rgba(124,58,237,0.2)" : "rgba(255,255,255,0.03)",
-                color:       statusFilter === s ? "#a78bfa" : "rgba(255,255,255,0.4)",
+                color:       statusFilter === s ? "#a78bfa" : "rgba(255,255,255,0.75)",
               }}>
               {s}
             </button>
@@ -663,19 +712,26 @@ function MyProperties({ addToast, onNavigate }) {
       ) : filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
           <Home size={44} color="rgba(255,255,255,0.1)" style={{ margin: "0 auto 12px" }} />
-          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: 14 }}>No properties found</p>
+          <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 14 }}>No properties found</p>
         </div>
       ) : (
         <div className="landlord-property-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => (
-            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} />
+            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} onView={property => { window.location.href = `/property/${property.id}`; }} />
           ))}
         </div>
       )}
 
+      {!loading && (page > 1 || pagination.hasMore) && <nav aria-label="Your property pages" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 24 }}>
+        <button type="button" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.8)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1 }}>Previous</button>
+        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Page {page}</span>
+        <button type="button" disabled={!pagination.hasMore} onClick={() => setPage(current => current + 1)} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", cursor: pagination.hasMore ? "pointer" : "not-allowed", opacity: pagination.hasMore ? 1 : 0.5 }}>Next</button>
+      </nav>}
+
       {retryPayment.property && <div style={{ marginTop: 18, maxWidth: 420, padding: 16, borderRadius: 14, background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)" }}>
         <p style={{ margin: "0 0 10px", color: "white", fontSize: 13, fontWeight: 600 }}>Complete payment for {retryPayment.property.title}</p>
-        <input value={retryPayment.phone} onChange={e => setRetryPayment(p => ({ ...p, phone: e.target.value, error: "" }))} placeholder="M-Pesa number e.g. 0712345678" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
+        <label htmlFor="retry-payment-phone" style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 6 }}>M-Pesa number</label>
+        <input id="retry-payment-phone" autoComplete="tel" value={retryPayment.phone} onChange={e => setRetryPayment(p => ({ ...p, phone: e.target.value, error: "" }))} placeholder="0712345678" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
         {retryPayment.error && <p style={{ fontSize: 12, color: "#f87171", margin: "8px 0 0" }} role="alert">{retryPayment.error}</p>}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={() => setRetryPayment({ property: null, phone: "", error: "" })} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>Cancel</button><button onClick={submitRetry} style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 600, cursor: "pointer" }}>Continue to payment</button></div>
       </div>}
@@ -732,13 +788,13 @@ function AddProperty({ addToast, onNavigate }) {
   return (
     <div style={{ maxWidth: 700 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-        <button onClick={() => onNavigate("properties")}
+          <button type="button" aria-label="Back to properties" onClick={() => onNavigate("properties")}
           style={{ width: 36, height: 36, borderRadius: 12, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "rgba(255,255,255,0.5)" }}>
           <ChevronRight size={16} style={{ transform: "rotate(180deg)" }} />
         </button>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "white", margin: 0 }}>Add New Property</h1>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>Fill in the details to list your property</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 2 }}>Fill in the details to list your property</p>
         </div>
       </div>
       <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
@@ -746,7 +802,7 @@ function AddProperty({ addToast, onNavigate }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <h2 style={{ margin: 0, color: "white", fontSize: 16 }}>Payment required to publish this listing</h2>
-              <p style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, lineHeight: 1.5 }}>Your listing has been saved as <strong>Pending Payment</strong> and will remain unpublished until PesaPal confirms payment.</p>
+              <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, lineHeight: 1.5 }}>Your listing has been saved as <strong>Pending Payment</strong> and will remain unpublished until PesaPal confirms payment.</p>
             </div>
             {pendingPayment.payment?.redirect_url && <button onClick={() => { window.location.href = pendingPayment.payment.redirect_url; }} style={{ padding: "11px 16px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 700, cursor: "pointer" }}>Complete listing payment with PesaPal</button>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -765,30 +821,35 @@ function AddProperty({ addToast, onNavigate }) {
 // ─── Inquiries page ───────────────────────────────────────────────────────────
 function Inquiries() {
   const [inquiries, setInquiries] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, hasMore: false });
 
   useEffect(() => {
-    API.get("/landlord/inquiries")
-      .then(({ data }) => setInquiries(data || []))
+    API.get("/landlord/inquiries", { params: { page, limit: 24 } })
+      .then(({ data }) => { const rows = data?.data || data || []; setInquiries(rows); setPagination(data?.pagination || { page, hasMore: rows.length === 24 }); })
       .catch(() => setInquiries([]));
-  }, []);
+  }, [page]);
 
-  const [search, setSearch] = useState("");
-  
-  // 2. Delete handler
-  const handleDelete = (id) => {
+  // Delete the server record as well as removing it from this view.
+  const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this inquiry?")) {
-      setInquiries(inquiries.filter(q => q.id !== id));
+      try {
+        await API.delete(`/landlord/inquiries/${id}`);
+        setInquiries(current => current.filter(q => q.id !== id));
+      } catch (err) {
+        window.alert(err.response?.data?.message || "Could not delete the inquiry.");
+      }
     }
   };
 
-  const filtered = inquiries.filter(q => !search || q.message.toLowerCase().includes(search.toLowerCase()) || q.user_name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = inquiries;
   const avatarBg = ["#7c3aed","#0ea5e9","#10b981","#f59e0b"];
 
   return (
     <div style={{ maxWidth: 720 }}>
       {/* ... Header and Search code remains the same ... */}
       
-       {inquiries.length === 0 ? <p style={{ color: "rgba(255,255,255,0.4)", fontSize: 14 }}>No inquiries yet</p> : filtered.map((q, i) => (
+       {inquiries.length === 0 ? <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 14 }}>No inquiries yet</p> : filtered.map((q, i) => (
         <div key={q.id} style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 18, padding: 18, marginBottom: 12 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
             <div style={{ width: 40, height: 40, borderRadius: "50%", background: avatarBg[i % avatarBg.length], display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "white", flexShrink: 0 }}>
@@ -800,7 +861,7 @@ function Inquiries() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: "white", margin: 0 }}>{q.user_name}</p>
-                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", margin: 0 }}>{new Date(q.created_at).toLocaleDateString("en-KE", { dateStyle: "medium" })}</p>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", margin: 0 }}>{new Date(q.created_at).toLocaleDateString("en-KE", { dateStyle: "medium" })}</p>
                 </div>
                 
                 {/* DELETE BUTTON */}
@@ -815,13 +876,18 @@ function Inquiries() {
                   <p style={{ fontSize: 11, color: "#8b5cf6", margin: 0 }}>{q.property_title}</p>
                 </div>
               )}
-              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.6)", lineHeight: 1.5, margin: 0 }}>{q.message}</p>
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.8)", lineHeight: 1.5, margin: 0 }}>{q.message}</p>
               
               {/* ... (Keep Reply buttons as they were) ... */}
             </div>
           </div>
         </div>
       ))}
+      {!inquiries.length ? null : <nav aria-label="Inquiry pages" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 24 }}>
+        <button type="button" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))} style={{ padding: "8px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.8)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1 }}>Previous</button>
+        <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Page {page}</span>
+        <button type="button" disabled={!pagination.hasMore} onClick={() => setPage(current => current + 1)} style={{ padding: "8px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", cursor: pagination.hasMore ? "pointer" : "not-allowed", opacity: pagination.hasMore ? 1 : 0.5 }}>Next</button>
+      </nav>}
     </div>
   );
 }
@@ -836,25 +902,55 @@ function Profile({ addToast }) {
   const [pwLoading,      setPwLoading]      = useState(false);
   const [passwordError,  setPasswordError]  = useState("");
 
-  const saveProfile = (e) => {
+  useEffect(() => {
+    API.get("/users/me").then(({ data }) => {
+      const current = JSON.parse(localStorage.getItem("user") || "{}");
+      const updated = { ...current, ...data.user };
+      localStorage.setItem("user", JSON.stringify(updated));
+      setProfileForm(updated);
+    }).catch(() => addToast("Could not refresh profile details.", "error"));
+  }, [addToast]);
+
+  const saveProfile = async (e) => {
     e.preventDefault();
     setProfileLoading(true);
-    // Replace with real API call: API.put("/users/profile", profileForm)
-    setTimeout(() => {
-      localStorage.setItem("user", JSON.stringify(profileForm));
+    try {
+      const { data } = await API.patch("/users/me", {
+        name: profileForm.name,
+        email: profileForm.email,
+        phone: profileForm.phone,
+      });
+      const current = JSON.parse(localStorage.getItem("user") || "{}");
+      const updated = { ...current, ...data.user };
+      localStorage.setItem("user", JSON.stringify(updated));
+      setProfileForm(updated);
       addToast("Profile updated!", "success");
+    } catch (err) {
+      addToast(err.response?.data?.message || "Could not update profile.", "error");
+    } finally {
       setProfileLoading(false);
-    }, 600);
+    }
   };
 
-  const changePassword = (e) => {
+  const changePassword = async (e) => {
     e.preventDefault();
     setPasswordError("");
     if (!pwForm.current_password || !pwForm.new_password || !pwForm.confirm_password) return setPasswordError("Please fill in all password fields first.");
     if (pwForm.new_password !== pwForm.confirm_password) return setPasswordError("Passwords do not match.");
-    if (pwForm.new_password.length < 6) return setPasswordError("Password must be at least 6 characters.");
+    if (pwForm.new_password.length < 10) return setPasswordError("Password must be at least 10 characters.");
     setPwLoading(true);
-    setTimeout(() => { addToast("Password changed!", "success"); setPwLoading(false); setPwForm({ current_password: "", new_password: "", confirm_password: "" }); }, 700);
+    try {
+      await API.post("/users/me/password", {
+        current_password: pwForm.current_password,
+        new_password: pwForm.new_password,
+      });
+      addToast("Password changed!", "success");
+      setPwForm({ current_password: "", new_password: "", confirm_password: "" });
+    } catch (err) {
+      setPasswordError(err.response?.data?.message || "Could not change password.");
+    } finally {
+      setPwLoading(false);
+    }
   };
 
   const setP  = (k, v) => setProfileForm(p => ({ ...p, [k]: v }));
@@ -866,7 +962,7 @@ function Profile({ addToast }) {
     <div style={{ maxWidth: 560 }}>
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 20, fontWeight: 800, color: "white", margin: 0 }}>Profile Settings</h1>
-        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Manage your account information</p>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 4 }}>Manage your account information</p>
       </div>
 
       {/* Avatar card */}
@@ -874,7 +970,7 @@ function Profile({ addToast }) {
         <div style={{ width: 60, height: 60, borderRadius: 18, background: "linear-gradient(135deg,#7c3aed,#ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 700, color: "white", flexShrink: 0 }}>{initial}</div>
         <div>
           <p style={{ fontSize: 15, fontWeight: 700, color: "white", margin: 0 }}>{profileForm?.name || "Landlord"}</p>
-          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", margin: "2px 0 6px" }}>{profileForm?.email}</p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.75)", margin: "2px 0 6px" }}>{profileForm?.email}</p>
           <span style={{ fontSize: 10, padding: "2px 10px", borderRadius: 20, background: "rgba(124,58,237,0.2)", border: "1px solid rgba(124,58,237,0.3)", color: "#a78bfa", fontWeight: 700 }}>LANDLORD</span>
         </div>
       </div>
@@ -887,8 +983,8 @@ function Profile({ addToast }) {
         <form onSubmit={saveProfile} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {[["Full Name","name","text","Your name"],["Email Address","email","email","email@example.com"],["Phone Number","phone","tel","+254 700 000 000"]].map(([label, key, type, placeholder]) => (
             <div key={key}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>{label}</label>
-              <input style={inputStyle} type={type} value={profileForm[key] || ""} onChange={e => setP(key, e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder={placeholder} />
+              <label htmlFor={`profile-${key}`} style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 6 }}>{label}</label>
+              <input id={`profile-${key}`} autoComplete={key === "phone" ? "tel" : key} style={inputStyle} type={type} value={profileForm[key] || ""} onChange={e => setP(key, e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder={placeholder} />
             </div>
           ))}
           <button type="submit" disabled={profileLoading}
@@ -906,8 +1002,8 @@ function Profile({ addToast }) {
         <form onSubmit={changePassword} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {[["Current Password","current_password"],["New Password","new_password"],["Confirm New Password","confirm_password"]].map(([label, key]) => (
             <div key={key}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.45)", marginBottom: 6 }}>{label}</label>
-              <input style={inputStyle} type="password" value={pwForm[key]} onChange={e => setPW(key, e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="••••••••" />
+              <label htmlFor={`password-${key}`} style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 6 }}>{label}</label>
+              <input id={`password-${key}`} autoComplete={key === "current_password" ? "current-password" : "new-password"} style={inputStyle} type="password" value={pwForm[key]} onChange={e => setPW(key, e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="••••••••" />
             </div>
           ))}
           {passwordError && <p style={{ fontSize: 12, color: "#f87171", margin: 0 }} role="alert">{passwordError}</p>}
@@ -1003,8 +1099,8 @@ export default function LandlordDashboard() {
             </div>
             <span style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 14, color: "white" }}>Kejahunt</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.4)", display: "flex" }}>
-            <X size={16} />
+          <button type="button" aria-label="Close dashboard navigation" onClick={() => setSidebarOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
+            <X size={16} aria-hidden="true" />
           </button>
         </div>
 
@@ -1016,14 +1112,14 @@ export default function LandlordDashboard() {
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 12, fontWeight: 600, color: "white", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName}</p>
-              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayEmail}</p>
+              <p style={{ fontSize: 10, color: "rgba(255,255,255,0.75)", margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayEmail}</p>
             </div>
           </div>
         </div>
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: "12px 10px", overflowY: "auto" }}>
-          <p style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.2)", textTransform: "uppercase", letterSpacing: "0.12em", padding: "0 8px", margin: "0 0 10px" }}>Dashboard</p>
+          <p style={{ fontSize: 9, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.12em", padding: "0 8px", margin: "0 0 10px" }}>Dashboard</p>
           {NAV.map(({ id, Icon, label }) => {
             const active = page === id;
             return (
@@ -1031,7 +1127,7 @@ export default function LandlordDashboard() {
                 style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 12, marginBottom: 2, cursor: "pointer",
                   border: `1px solid ${active ? "rgba(124,58,237,0.22)" : "transparent"}`,
                   background: active ? "rgba(124,58,237,0.15)" : "none",
-                  color: active ? "#a78bfa" : "rgba(255,255,255,0.45)",
+                  color: active ? "#a78bfa" : "rgba(255,255,255,0.75)",
                   fontSize: 13, fontWeight: 500, textAlign: "left", transition: "all 0.15s",
                 }}>
                 <Icon size={16} style={{ flexShrink: 0 }} />
@@ -1054,14 +1150,14 @@ export default function LandlordDashboard() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
         <header className="landlord-topbar" style={{ height: 64, background: "rgba(9,9,23,0.9)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", position: "sticky", top: 0, zIndex: 30 }}>
-          <button id="ld-menu-btn" onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.5)", display: "flex" }}>
-            <Menu size={20} />
+          <button type="button" id="ld-menu-btn" aria-label="Open dashboard navigation" onClick={() => setSidebarOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.7)", display: "flex" }}>
+            <Menu size={20} aria-hidden="true" />
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Welcome,</span>
+            <span style={{ fontSize: 12, color: "rgba(255,255,255,0.8)" }}>Welcome,</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: "white" }}>{displayName}</span>
-            <button style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
-              <Bell size={15} color="rgba(255,255,255,0.5)" />
+            <button type="button" aria-label="Notifications" style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", position: "relative" }}>
+              <Bell size={15} color="rgba(255,255,255,0.7)" aria-hidden="true" />
               <span style={{ position: "absolute", top: 7, right: 7, width: 6, height: 6, borderRadius: "50%", background: "#7c3aed" }} />
             </button>
           </div>
@@ -1083,11 +1179,11 @@ function PaymentOptions({ value, onChange }) {
   ];
   return <section style={{ marginBottom: 22, padding: 16, borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
     <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Choose how to pay</h2>
-    <p style={{ margin: "0 0 12px", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>Payment starts after the listing details are saved. A confirmed subscription records its expiry automatically.</p>
+    <p style={{ margin: "0 0 12px", color: "rgba(255,255,255,0.8)", fontSize: 12 }}>Payment starts after the listing details are saved. A confirmed subscription records its expiry automatically.</p>
     <div style={{ display: "grid", gap: 8 }}>
       {options.map(option => <label key={option.id} style={{ display: "flex", gap: 10, cursor: "pointer", padding: 12, borderRadius: 10, border: `1px solid ${value === option.id ? "#a78bfa" : "rgba(255,255,255,0.12)"}`, background: value === option.id ? "rgba(124,58,237,0.18)" : "rgba(0,0,0,0.12)" }}>
         <input type="radio" name="listing-payment" value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
-        <span><strong style={{ color: "white", fontSize: 13 }}>{option.title} — {option.price}</strong><small style={{ display: "block", color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{option.note}</small></span>
+        <span><strong style={{ color: "white", fontSize: 13 }}>{option.title} — {option.price}</strong><small style={{ display: "block", color: "rgba(255,255,255,0.8)", marginTop: 3 }}>{option.note}</small></span>
       </label>)}
     </div>
   </section>;

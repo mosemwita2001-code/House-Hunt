@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /landlord
+
+Sitemap: https://keja-hunt-three.vercel.app/sitemap.xml

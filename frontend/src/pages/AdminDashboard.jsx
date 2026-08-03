@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   LayoutDashboard, Users, Home, Trash2,
   UserX, UserCheck, Menu, X, AlertTriangle, Loader2, LogOut, Clock,
-  Building2, TrendingUp, Search, Filter, CheckCircle, XCircle, BarChart3
+  Building2, Search, Filter, CheckCircle, XCircle, BarChart3
 } from "lucide-react";
 import {
   getDashboardStats,
@@ -23,6 +23,15 @@ const normalizeListing = (listing) => ({
   images: listing.images || (listing.image_path ? listing.image_path.split(",").map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` })) : []),
 });
 
+function PageControls({ label, page, hasMore, onPage }) {
+  if (page === 1 && !hasMore) return null;
+  return <nav aria-label={`${label} pages`} style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: 20 }}>
+    <button type="button" disabled={page === 1} onClick={() => onPage(Math.max(1, page - 1))} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.8)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1 }}>Previous</button>
+    <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Page {page}</span>
+    <button type="button" disabled={!hasMore} onClick={() => onPage(page + 1)} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#7c3aed", color: "white", cursor: hasMore ? "pointer" : "not-allowed", opacity: hasMore ? 1 : 0.5 }}>Next</button>
+  </nav>;
+}
+
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -38,6 +47,12 @@ export default function AdminDashboard() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [usersPage, setUsersPage] = useState(1);
+  const [listingsPage, setListingsPage] = useState(1);
+  const [paymentsPage, setPaymentsPage] = useState(1);
+  const [usersPagination, setUsersPagination] = useState({ hasMore: false });
+  const [listingsPagination, setListingsPagination] = useState({ hasMore: false });
+  const [paymentsPagination, setPaymentsPagination] = useState({ hasMore: false });
 
   // Get active admin info from local storage session
   const adminUser = JSON.parse(localStorage.getItem("user") || "null") || { name: "Administrator", email: "admin@system.com" };
@@ -50,15 +65,18 @@ export default function AdminDashboard() {
     try {
       const [statsRes, usersRes, listingsRes, paymentsRes] = await Promise.all([
         getDashboardStats(),
-        getAllUsers(),
-        getAllListings(),
-        getAllPayments()
+        getAllUsers({ page: 1, limit: 24 }),
+        getAllListings({ page: 1, limit: 24 }),
+        getAllPayments({ page: 1, limit: 24 })
       ]);
 
       setStats(statsRes.data);
-      setUsers(usersRes.data);
-      setListings(listingsRes.data.map(normalizeListing));
-      setPayments(paymentsRes.data || []);
+      setUsers(usersRes.data?.data || usersRes.data || []);
+      setListings((listingsRes.data?.data || listingsRes.data || []).map(normalizeListing));
+      setPayments(paymentsRes.data?.data || paymentsRes.data || []);
+      setUsersPagination(usersRes.data?.pagination || { hasMore: false });
+      setListingsPagination(listingsRes.data?.pagination || { hasMore: false });
+      setPaymentsPagination(paymentsRes.data?.pagination || { hasMore: false });
     } catch (err) {
       console.error("Database connection failure:", err);
       setError(err.response?.data?.message || "Failed to establish a secure link with MySQL.");
@@ -66,6 +84,24 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   }, []);
+
+  const loadPage = async (kind, nextPage) => {
+    try {
+      const params = { page: nextPage, limit: 24 };
+      if (kind === "users") {
+        const { data } = await getAllUsers(params);
+        setUsers(data?.data || data || []); setUsersPagination(data?.pagination || { hasMore: false }); setUsersPage(nextPage);
+      } else if (kind === "listings") {
+        const { data } = await getAllListings(params);
+        setListings((data?.data || data || []).map(normalizeListing)); setListingsPagination(data?.pagination || { hasMore: false }); setListingsPage(nextPage);
+      } else {
+        const { data } = await getAllPayments(params);
+        setPayments(data?.data || data || []); setPaymentsPagination(data?.pagination || { hasMore: false }); setPaymentsPage(nextPage);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Unable to load this page.");
+    }
+  };
 
   useEffect(() => {
     loadDashboardData();
@@ -196,7 +232,7 @@ export default function AdminDashboard() {
             <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#ec4899)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "white" }}>{displayInitial}</div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>{adminUser.name}</p>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>Root Controller</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.75)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", margin: 0 }}>Root Controller</p>
             </div>
           </div>
           <button onClick={handleLogout} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "10px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.2)", borderRadius: 8, color: "#f87171", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
@@ -210,8 +246,8 @@ export default function AdminDashboard() {
         {/* HEADER */}
         <div className="admin-topbar" style={{ height: 70, background: "#111827", borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", display: "flex", alignItems: "center" }}>
-              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            <button type="button" aria-label={sidebarOpen ? "Close admin navigation" : "Open admin navigation"} aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.8)", cursor: "pointer", display: "flex", alignItems: "center" }}>
+              {sidebarOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
             </button>
             <h1 style={{ fontSize: 18, fontWeight: 700, textTransform: "capitalize", margin: 0 }}>{activeTab === "dashboard" ? "Control Panel" : activeTab === "statistics" ? "Analytical Metrics" : `${activeTab} interface`}</h1>
           </div>
@@ -240,7 +276,7 @@ export default function AdminDashboard() {
                   return (
                     <div key={i} style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.04)", padding: 24, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div>
-                        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", fontWeight: 500, margin: "0 0 6px 0" }}>{card.label}</p>
+                        <p style={{ fontSize: 13, color: "rgba(255,255,255,0.75)", fontWeight: 500, margin: "0 0 6px 0" }}>{card.label}</p>
                         <h3 style={{ fontSize: 28, fontWeight: 700, margin: 0, color: "white" }}>{card.count}</h3>
                       </div>
                       <div style={{ background: `rgba(${card.color === "#7c3aed" ? "124,58,237" : card.color === "#10b981" ? "16,185,129" : card.color === "#f59e0b" ? "245,158,11" : "59,130,246"}, 0.1)`, padding: 12, borderRadius: 12 }}>
@@ -252,7 +288,7 @@ export default function AdminDashboard() {
               </div>
               <div style={{ background: "#111827", borderRadius: 16, padding: 32, textAlign: "center", border: "1px solid rgba(255,255,255,0.04)" }}>
                 <h2 style={{ fontSize: 20, fontWeight: 600, margin: "0 0 8px 0" }}>Welcome back, {adminUser.name}</h2>
-                <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14, margin: 0 }}>Select an option from the sidebar to begin managing the KejaHunt nodes.</p>
+                <p style={{ color: "rgba(255,255,255,0.8)", fontSize: 14, margin: 0 }}>Select an option from the sidebar to begin managing the KejaHunt nodes.</p>
               </div>
             </div>
           )}
@@ -263,11 +299,13 @@ export default function AdminDashboard() {
               <div className="admin-table-controls" style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
                   <Search size={16} color="rgba(255,255,255,0.3)" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
-                  <input type="text" placeholder="Search rows by profile name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
+                  <label htmlFor="admin-user-search" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>Search users</label>
+                  <input id="admin-user-search" type="text" placeholder="Search rows by profile name or email..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <Filter size={14} color="rgba(255,255,255,0.4)" />
-                  <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", color: "white", padding: "10px 14px", borderRadius: 10, fontSize: 14, outline: "none", cursor: "pointer" }}>
+                  <label htmlFor="admin-user-status" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>Filter users by status</label>
+                  <select id="admin-user-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", color: "white", padding: "10px 14px", borderRadius: 10, fontSize: 14, outline: "none", cursor: "pointer" }}>
                     <option value="all">All Profiles</option>
                     <option value="active">Active Only</option>
                     <option value="suspended">Suspended Only</option>
@@ -278,12 +316,12 @@ export default function AdminDashboard() {
               <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                 <thead>
                   <tr style={{ background: "rgba(255,255,255,0.01)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Identity</th>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Role Classification</th>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Integrity Status</th>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>House Listings</th>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Registered Date</th>
-                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.4)", textAlign: "right" }}>Actions</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>Identity</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>Role Classification</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>Integrity Status</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>House Listings</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)" }}>Registered Date</th>
+                    <th style={{ padding: "16px 24px", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.75)", textAlign: "right" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -306,12 +344,12 @@ export default function AdminDashboard() {
                         <td style={{ padding: "18px 24px", textAlign: "right" }}>
                           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                             {user.role !== "admin" && (
-                              <button onClick={() => handleToggleUserStatus(user.id, userStatus)} title={userStatus === "active" ? "Suspend Account" : "Activate Account"} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", padding: 6, borderRadius: 8, color: "rgba(255,255,255,0.6)", cursor: "pointer" }}>
+                              <button type="button" aria-label={userStatus === "active" ? "Suspend account" : "Activate account"} onClick={() => handleToggleUserStatus(user.id, userStatus)} title={userStatus === "active" ? "Suspend Account" : "Activate Account"} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", padding: 6, borderRadius: 8, color: "rgba(255,255,255,0.6)", cursor: "pointer" }}>
                                 {userStatus === "active" ? <UserX size={15} color="#ef4444" /> : <UserCheck size={15} color="#10b981" />}
                               </button>
                             )}
-                            <button onClick={() => handleDeleteUserClick(user.id)} title="Delete Row Profile" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}>
-                              <Trash2 size={15} />
+                            <button type="button" aria-label={`Delete user ${user.name || user.email}`} onClick={() => handleDeleteUserClick(user.id)} title="Delete Row Profile" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}>
+                              <Trash2 size={15} aria-hidden="true" />
                             </button>
                           </div>
                         </td>
@@ -320,6 +358,7 @@ export default function AdminDashboard() {
                   })}
                 </tbody>
               </table>
+              <PageControls label="Admin users" page={usersPage} hasMore={usersPagination.hasMore} onPage={nextPage => loadPage("users", nextPage)} />
             </div>
           )}
 
@@ -329,9 +368,11 @@ export default function AdminDashboard() {
               <div className="admin-table-controls" style={{ padding: 24, borderBottom: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: 16, justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ position: "relative", flex: 1, maxWidth: 360 }}>
                   <Search size={16} color="rgba(255,255,255,0.3)" style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)" }} />
-                  <input type="text" placeholder="Search by housing title or listing landlord..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
+                  <label htmlFor="admin-listing-search" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>Search listings</label>
+                  <input id="admin-listing-search" type="text" placeholder="Search by housing title or listing landlord..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} style={{ width: "100%", background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "10px 14px 10px 40px", color: "white", fontSize: 14, outline: "none" }} />
                 </div>
-                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", color: "white", padding: "10px 14px", borderRadius: 10, fontSize: 14, outline: "none", cursor: "pointer" }}>
+                <label htmlFor="admin-listing-status" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0,0,0,0)", whiteSpace: "nowrap", border: 0 }}>Filter listings by status</label>
+                <select id="admin-listing-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ background: "#0b0f19", border: "1px solid rgba(255,255,255,0.08)", color: "white", padding: "10px 14px", borderRadius: 10, fontSize: 14, outline: "none", cursor: "pointer" }}>
                   <option value="all">All Application Statuses</option>
                   <option value="approved">Approved / Active</option>
                   <option value="pending">Awaiting Verification</option>
@@ -375,18 +416,19 @@ export default function AdminDashboard() {
                       <td style={{ padding: "18px 24px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           {(listing.status === "pending" || listing.status === "rejected") && (
-                            <button onClick={() => handleUpdateListingStatus(listing.id, "approved")} title="Approve Listing" style={{ background: "rgba(16,185,129,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#34d399", cursor: "pointer" }}><CheckCircle size={15} /></button>
+                            <button type="button" aria-label="Approve listing" onClick={() => handleUpdateListingStatus(listing.id, "approved")} title="Approve Listing" style={{ background: "rgba(16,185,129,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#34d399", cursor: "pointer" }}><CheckCircle size={15} aria-hidden="true" /></button>
                           )}
-                          {listing.status === "approved" && (
-                            <button onClick={() => handleUpdateListingStatus(listing.id, "rejected")} title="Reject / Deactivate Listing" style={{ background: "rgba(245,158,11,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#fbbf24", cursor: "pointer" }}><XCircle size={15} /></button>
+                          {(listing.status === "approved" || listing.status === "active") && (
+                            <button type="button" aria-label="Reject listing" onClick={() => handleUpdateListingStatus(listing.id, "rejected")} title="Reject / Deactivate Listing" style={{ background: "rgba(245,158,11,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#fbbf24", cursor: "pointer" }}><XCircle size={15} aria-hidden="true" /></button>
                           )}
-                          <button onClick={() => handleDeleteListingClick(listing.id)} title="Delete Listing Row" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}><Trash2 size={15} /></button>
+                          <button type="button" aria-label={`Delete listing ${listing.title}`} onClick={() => handleDeleteListingClick(listing.id)} title="Delete Listing Row" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}><Trash2 size={15} aria-hidden="true" /></button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <PageControls label="Admin listings" page={listingsPage} hasMore={listingsPagination.hasMore} onPage={nextPage => loadPage("listings", nextPage)} />
             </div>
           )}
 
@@ -396,6 +438,7 @@ export default function AdminDashboard() {
               <h2 style={{ marginTop: 0 }}>Payments</h2>
               {payments.map(payment => <div key={payment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.08)" }}><div><div>{payment.type} · KES {Number(payment.amount).toLocaleString()}</div><small style={{ opacity: .6 }}>{payment.property_title || payment.landlord_name || 'Platform'} · {payment.status}</small></div>{payment.status !== 'success' && <button onClick={async () => { await resolvePayment(payment.id); setPayments(ps => ps.map(p => p.id === payment.id ? { ...p, status: 'success' } : p)); }} style={{ background: "#7c3aed", color: "white", border: 0, borderRadius: 8, padding: "7px 10px", cursor: "pointer" }}>Resolve</button>}</div>)}
               {!payments.length && <p style={{ opacity: .6 }}>No payments recorded.</p>}
+              <PageControls label="Admin payments" page={paymentsPage} hasMore={paymentsPagination.hasMore} onPage={nextPage => loadPage("payments", nextPage)} />
             </div>
           )}
 

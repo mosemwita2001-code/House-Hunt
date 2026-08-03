@@ -7,14 +7,9 @@ module.exports = {
   rules: {
     'react/react-in-jsx-scope': 'off',
     'react/prop-types': 'off',
-    // The repository contains legacy JSX fragments that predate this config.
-    // Keep lint focused on parse and React syntax errors until those fragments
-    // are migrated into components.
-    'no-undef': 'off',
+    // Keep framework-specific noise low while retaining the core correctness
+    // checks that catch undefined names, unused values, and hook mistakes.
     'no-irregular-whitespace': 'off',
-    'no-unused-vars': 'off',
     'react/no-unescaped-entities': 'off',
-    'react-hooks/rules-of-hooks': 'off',
-    'react-hooks/exhaustive-deps': 'off',
   },
 };
