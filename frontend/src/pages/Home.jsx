@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
+import { MessageCircle, Phone, X } from 'lucide-react';
 import API from '../services/api.js';
 import { AuthContext } from '../context/AuthContext';
 
@@ -18,6 +19,11 @@ const COUNTIES = [
   "Makueni","Nandi","Baringo","Elgeyo Marakwet","Narok","Turkana",
   "Marsabit","Isiolo","Garissa","Wajir","Mandera","Taita Taveta",
   "Tana River","Lamu","Nyamira","Mombasa"
+];
+
+const SUPPORT_OPTIONS = [
+  { label: 'Technical Support', number: '+254705598222' },
+  { label: 'Customer Support', number: '+254794777312' },
 ];
 
 const getFirstImage = (image_path) => {
@@ -53,7 +59,12 @@ export default function Home() {
   const [hoveredId, setHoveredId]     = useState(null);
   const [page, setPage]               = useState(1);
   const [pagination, setPagination]   = useState({ page: 1, limit: 24, hasMore: false });
+  const [showSupport, setShowSupport] = useState(false);
+  const [supportHovered, setSupportHovered] = useState(false);
   const heroRef = useRef(null);
+  const supportTriggerRef = useRef(null);
+  const supportDialogRef = useRef(null);
+  const supportCloseRef = useRef(null);
 
   useEffect(() => {
     const fetchProperties = async () => {
@@ -79,6 +90,39 @@ export default function Home() {
   }, [page, search, houseType, county, minPrice, maxPrice, sortBy]);
 
   useEffect(() => { setPage(1); }, [search, houseType, county, minPrice, maxPrice, sortBy]);
+
+  useEffect(() => {
+    if (!showSupport) return undefined;
+    const trigger = supportTriggerRef.current;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowSupport(false);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !supportDialogRef.current) return;
+      const focusable = Array.from(supportDialogRef.current.querySelectorAll('button, a[href]'));
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    supportCloseRef.current?.focus();
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      trigger?.focus();
+    };
+  }, [showSupport]);
 
   const clearFilters = () => {
     setSearch(''); setSearchInput(''); setHouseType(''); setCounty('');
@@ -465,6 +509,7 @@ backgroundPosition: 'center',
           <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, marginBottom: 28, maxWidth: 400, margin: '0 auto 28px' }}>
             List your property and reach thousands of tenants across Kenya
           </p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
           <Link to={user?.role === 'landlord' ? '/landlord?page=add' : '/register'} style={{
             display: 'inline-block', background: '#eab308', color: '#1a1a2e',
             padding: '14px 32px', borderRadius: 14, fontSize: 15, fontWeight: 700,
@@ -472,6 +517,116 @@ backgroundPosition: 'center',
           }}>
             List Your Property →
           </Link>
+          <button
+            ref={supportTriggerRef}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={showSupport}
+            onClick={() => setShowSupport(true)}
+            onMouseEnter={() => setSupportHovered(true)}
+            onMouseLeave={() => setSupportHovered(false)}
+            onFocus={() => setSupportHovered(true)}
+            onBlur={() => setSupportHovered(false)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              background: supportHovered ? 'rgba(234,179,8,0.18)' : 'rgba(255,255,255,0.08)',
+              color: '#fde68a', border: '1px solid rgba(234,179,8,0.7)',
+              padding: '10px 18px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+              boxShadow: supportHovered ? '0 8px 22px rgba(0,0,0,0.18)' : 'none',
+              transform: supportHovered ? 'translateY(-1px)' : 'none',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease',
+            }}
+          >
+            <MessageCircle size={16} aria-hidden="true" />
+            Need Help?
+          </button>
+          </div>
+        </div>
+      )}
+
+      {showSupport && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowSupport(false);
+          }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 16,
+            background: 'rgba(10,15,30,0.68)',
+          }}
+        >
+          <div
+            ref={supportDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="support-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: 520, maxHeight: 'calc(100vh - 32px)',
+              overflowY: 'auto', background: '#ffffff', borderRadius: 20,
+              padding: 24, boxShadow: '0 24px 80px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 20 }}>
+              <div>
+                <h2 id="support-dialog-title" style={{ color: '#1a1a2e', fontFamily: "'Playfair Display', serif", fontSize: 24, margin: 0 }}>
+                  Need Help?
+                </h2>
+                <p style={{ color: '#6b7280', fontSize: 13, lineHeight: 1.5, margin: '6px 0 0' }}>
+                  Choose a support team to contact.
+                </p>
+              </div>
+              <button
+                ref={supportCloseRef}
+                type="button"
+                aria-label="Close support dialog"
+                onClick={() => setShowSupport(false)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 36, height: 36, flexShrink: 0, border: 'none', borderRadius: 10,
+                  background: '#f3f4f6', color: '#374151', cursor: 'pointer',
+                }}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              {SUPPORT_OPTIONS.map(({ label, number }) => (
+                <div key={label} style={{ border: '1px solid #e5e7eb', borderRadius: 14, padding: 16 }}>
+                  <h3 style={{ color: '#1f2937', fontSize: 15, margin: '0 0 12px' }}>{label}</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <a
+                      href={`https://wa.me/${number.replace('+', '')}?text=${encodeURIComponent('Hi, I need help with Keja Hunt')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        flex: '1 1 150px', background: '#16a34a', color: 'white', borderRadius: 10,
+                        padding: '10px 12px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                      }}
+                    >
+                      <MessageCircle size={16} aria-hidden="true" />
+                      WhatsApp
+                    </a>
+                    <a
+                      href={`tel:${number}`}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                        flex: '1 1 150px', background: '#eab308', color: '#1a1a2e', borderRadius: 10,
+                        padding: '10px 12px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                      }}
+                    >
+                      <Phone size={16} aria-hidden="true" />
+                      Call
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
