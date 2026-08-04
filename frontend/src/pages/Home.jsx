@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle, Phone, X } from 'lucide-react';
+import { MessageCircle, X } from 'lucide-react';
 import API from '../services/api.js';
 import { AuthContext } from '../context/AuthContext';
+import WhatsAppIcon from '../components/WhatsAppIcon.jsx';
 
 const HOUSE_TYPES = [
   "Bedsitter","Single Room","One Bedroom","Two Bedroom","Three Bedroom",
@@ -604,23 +605,12 @@ backgroundPosition: 'center',
                       rel="noopener noreferrer"
                       style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        flex: '1 1 150px', background: '#16a34a', color: 'white', borderRadius: 10,
+                        flex: '1 1 150px', background: '#0f3460', color: 'white', border: '1px solid rgba(234,179,8,0.45)', borderRadius: 10,
                         padding: '10px 12px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
                       }}
                     >
-                      <MessageCircle size={16} aria-hidden="true" />
+                      <WhatsAppIcon width={20} height={20} />
                       WhatsApp
-                    </a>
-                    <a
-                      href={`tel:${number}`}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                        flex: '1 1 150px', background: '#eab308', color: '#1a1a2e', borderRadius: 10,
-                        padding: '10px 12px', fontSize: 13, fontWeight: 700, textDecoration: 'none',
-                      }}
-                    >
-                      <Phone size={16} aria-hidden="true" />
-                      Call
                     </a>
                   </div>
                 </div>
