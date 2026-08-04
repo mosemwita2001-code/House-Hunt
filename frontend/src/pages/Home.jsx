@@ -43,6 +43,12 @@ const formatPrice = (price) => {
   return `KES ${n.toLocaleString()}`;
 };
 
+const getAmenities = value => {
+  if (Array.isArray(value)) return [...new Set(value.filter(item => typeof item === 'string').map(item => item.trim()).filter(Boolean))];
+  if (typeof value !== 'string' || !value.trim()) return [];
+  try { return getAmenities(JSON.parse(value)); } catch { return getAmenities(value.split(',')); }
+};
+
 export default function Home() {
   const { user } = useContext(AuthContext);
   const [properties, setProperties]   = useState([]);
@@ -174,7 +180,6 @@ backgroundPosition: 'center',
         <div style={{ textAlign: 'center', maxWidth: 760, position: 'relative', zIndex: 1 }}>
           {/* Badge */}
           <div className="fade-up" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: 30, padding: '6px 16px', marginBottom: 24 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#eab308', display: 'inline-block' }} />
             <span style={{ color: '#eab308', fontSize: 12, fontWeight: 600, letterSpacing: '0.08em' }}>KENYA'S TRUSTED RENTAL PLATFORM</span>
           </div>
 
@@ -388,6 +393,7 @@ backgroundPosition: 'center',
           <div className="home-property-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
             {filtered.map((house, i) => {
               const imageUrl = getFirstImage(house.image_path);
+              const amenities = getAmenities(house.amenities);
               const isHovered = hoveredId === house.id;
               return (
                 <Link
@@ -465,6 +471,21 @@ backgroundPosition: 'center',
                         )}
                       </div>
 
+                      {amenities.length > 0 && (
+                        <div aria-label="Property amenities" style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+                          {amenities.slice(0, 3).map(amenity => (
+                            <span key={amenity} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 999, color: '#4b5563', fontSize: 11, lineHeight: 1.2, maxWidth: '100%', overflow: 'hidden', padding: '5px 9px', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {amenity}
+                            </span>
+                          ))}
+                          {amenities.length > 3 && (
+                            <span style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 999, color: '#92400e', fontSize: 11, lineHeight: 1.2, padding: '5px 9px', whiteSpace: 'nowrap' }}>
+                              +{amenities.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* Price + CTA */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
@@ -511,7 +532,7 @@ backgroundPosition: 'center',
             List your property and reach thousands of tenants across Kenya
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <Link to={user?.role === 'landlord' ? '/landlord?page=add' : '/register'} style={{
+          <Link to={user?.role === 'landlord' || user?.role === 'admin' ? '/landlord?page=add' : '/register'} style={{
             display: 'inline-block', background: '#eab308', color: '#1a1a2e',
             padding: '14px 32px', borderRadius: 14, fontSize: 15, fontWeight: 700,
             textDecoration: 'none', fontFamily: 'inherit',

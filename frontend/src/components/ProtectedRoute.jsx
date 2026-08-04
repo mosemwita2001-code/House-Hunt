@@ -17,7 +17,7 @@ export default function ProtectedRoute({ children, roleRequired }) {
   }
 
   // 2. If a specific role is required, check it
-  if (roleRequired && user.role !== roleRequired) {
+  if (roleRequired && user.role !== roleRequired && !(roleRequired === 'landlord' && user.role === 'admin')) {
     return <Navigate to="/" replace />;
   }
 

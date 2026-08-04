@@ -39,12 +39,24 @@ const propertyImage = (p, size = "400x260") => {
   return p.images?.[0]?.image_url || `https://placehold.co/${size}/1a1a2e/444?text=No+Image`;
 };
 
+const parseAmenities = value => {
+  if (Array.isArray(value)) return [...new Set(value.filter(item => typeof item === "string").map(item => item.trim()).filter(Boolean))];
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return parseAmenities(parsed);
+  } catch {
+    return parseAmenities(value.split(","));
+  }
+};
+
 const normalizeProperty = (p) => ({
   ...p,
   status: p.status || "available",
   moderationStatus: p.verification_status || "pending",
   phoneNumber: p.phone_number || p.phoneNumber || "",
   rentPeriod:  p.payment_cycle || p.rentPeriod || "month",
+  amenities:   parseAmenities(p.amenities),
   images:      p.images || (p.image_path
     ? p.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` }))
     : []),
@@ -244,9 +256,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
     ...initial,
     phoneNumber:  initial?.phone_number  || initial?.phoneNumber  || "",
     rentPeriod:   initial?.payment_cycle || initial?.rentPeriod   || "month",
-    amenities:    initial?.amenities
-      ? (Array.isArray(initial.amenities) ? initial.amenities : initial.amenities.split(",").map(a => a.trim()).filter(Boolean))
-      : [],
+    amenities:    parseAmenities(initial?.amenities),
   }));
   const [previews, setPreviews] = useState(() => {
     if (initial?.images?.length) return initial.images.map(i => i.image_url);
@@ -318,7 +328,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
     fd.append("mpesa_number",  form.mpesa_number || form.phoneNumber);
     fd.append("payment_cycle", form.rentPeriod);
     fd.append("payment_option", paymentOption);
-    fd.append("amenities",     form.amenities.join(","));
+    fd.append("amenities",     JSON.stringify(form.amenities));
     newImages.forEach(img => fd.append("images", img));
     onSubmit(fd, form);
   };

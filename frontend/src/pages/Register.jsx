@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import API from '../services/api';
 
 export default function Register() {
@@ -42,6 +42,9 @@ export default function Register() {
         </select>
         {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
         <button type="submit" className="w-full bg-blue-600 text-white p-2">Register</button>
+        <p className="text-center text-xs leading-5 text-slate-500">
+          By signing up, you agree to our <Link to="/terms" className="text-brand hover:text-brand-dark">Terms and Conditions</Link> and <Link to="/privacy-policy" className="text-brand hover:text-brand-dark">Privacy Policy</Link>
+        </p>
       </form>
     </div>
   );

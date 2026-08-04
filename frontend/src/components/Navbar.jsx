@@ -39,7 +39,7 @@ export default function Navbar() {
           <Link to="/" className="text-slate-600 hover:text-slate-900 font-medium py-2 sm:py-0">Browse</Link>
           {user ? (
             <>
-              {user.role === 'landlord' && (
+              {(user.role === 'landlord' || user.role === 'admin') && (
                 <Link to="/landlord?page=add" className="flex items-center gap-1 text-slate-600 hover:text-slate-900 font-medium py-2 sm:py-0">
                   <PlusSquare className="h-4 w-4" aria-hidden="true" /> List Property
                 </Link>

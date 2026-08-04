@@ -12,6 +12,7 @@ import { v2 as cloudinary } from 'cloudinary';
 import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { handleIPN, registerIPN, submitOrder } from './pesapalService.js';
 import { pagination } from './pagination.js';
+import { amenitiesForResponse, normalizeAmenities } from './utils/amenities.js';
 
 /* ── Cloudinary config ──────────────────────────────────────────────────── */
 cloudinary.config({
@@ -221,7 +222,8 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
-const publicFields = 'p.id, p.title, p.county, p.town, p.house_type, p.price, p.payment_cycle, p.image_path, p.status, p.bedrooms, p.bathrooms, p.created_at';
+const publicFields = 'p.id, p.title, p.county, p.town, p.house_type, p.price, p.payment_cycle, p.image_path, p.amenities, p.status, p.bedrooms, p.bathrooms, p.created_at';
+const propertyWithAmenities = property => ({ ...property, amenities: amenitiesForResponse(property.amenities) });
 const isAdmin = req => req.user?.role === 'admin';
 const isOwner = (req, property) => req.user?.role === 'landlord' && Number(req.user.id) === Number(property.landlord_id);
 
@@ -424,7 +426,7 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
        : ' ORDER BY p.created_at DESC';
     q += ` LIMIT ${limit} OFFSET ${offset}`;
     const [rows] = await executeReadWithRetry(q, params);
-    res.json(paginated(rows, page, limit));
+    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
   } catch (err) {
     console.error('GET /properties error:', err);
     res.status(500).json({ message: 'Unable to load properties' });
@@ -449,7 +451,8 @@ app.get('/api/properties/:id', optionalAuth, async (req, res) => {
     const safe = {
       id: property.id, title: property.title, county: property.county, town: property.town,
       house_type: property.house_type, price: property.price, payment_cycle: property.payment_cycle,
-      image_path: property.image_path, status: property.status, full_access: full,
+      image_path: property.image_path, amenities: amenitiesForResponse(property.amenities),
+      status: property.status, full_access: full,
     };
     if (full) {
       safe.description = property.description;
@@ -494,7 +497,7 @@ app.get('/api/landlord/dashboard', protect, authorize('landlord'), async (req, r
         pending:   Number(propertyStats.pending || 0),
         inquiries: inquiries.length,
       },
-      properties,
+      properties: properties.map(propertyWithAmenities),
       inquiries,
     });
   } catch (err) {
@@ -510,21 +513,25 @@ app.get('/api/landlord/my-properties', protect, authorize('landlord'), async (re
       `SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
       [req.user.id]
     );
-    res.json(paginated(rows, page, limit));
+    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
   } catch (err) {
     console.error('My-properties error:', err);
     res.status(500).json({ message: 'Unable to load properties' });
   }
 });
 
-app.post('/api/landlord/properties', protect, authorize('landlord'), upload.array('images', 10), async (req, res) => {
+app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), upload.array('images', 10), async (req, res) => {
   let connection;
   try {
     const {
       title, county, town, house_type, price,
       description, deposit, bedrooms, bathrooms, payment_option = 'listing',
-      payment_cycle, phone_number, mpesa_number,
+      payment_cycle, phone_number, mpesa_number, amenities: rawAmenities = [],
     } = req.body;
+
+    const amenities = normalizeAmenities(rawAmenities);
+    if (amenities === null)
+      return res.status(400).json({ message: 'amenities must be an array of strings' });
 
     if (!title || !county || !town || !house_type || !price)
       return res.status(400).json({ message: 'title, county, town, house_type and price are required' });
@@ -536,7 +543,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord'), upload.arra
 
     if (!PLAN_OPTIONS[payment_option]) return res.status(400).json({ message: 'Invalid payment option' });
     const phone = mpesa_number || phone_number;
-    if (!phone) return res.status(400).json({ message: 'An M-Pesa number is required for listing payment' });
+    if (req.user.role !== 'admin' && !phone) return res.status(400).json({ message: 'An M-Pesa number is required for listing payment' });
 
     // Only DB work is inside this transaction. It is committed and released
     // before the remote PesaPal request, preventing checkout from exhausting
@@ -548,13 +555,13 @@ app.post('/api/landlord/properties', protect, authorize('landlord'), upload.arra
        WHERE id=? AND active_plan <> 'none' AND plan_expires_at > NOW()`,
       [req.user.id]
     );
-    const covered = plans.length > 0;
+    const covered = req.user.role === 'admin' || plans.length > 0;
     const [result] = await connection.execute(
       `INSERT INTO properties
         (title, county, town, house_type, price, description, deposit,
          bedrooms, bathrooms, image_path, payment_cycle, phone_number,
-         landlord_id, verification_status, status, payment_status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         amenities, landlord_id, verification_status, status, payment_status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         title, county, town, house_type, Number(price),
         description || '', Number(deposit) || 0,
@@ -562,6 +569,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord'), upload.arra
         imagePath,
         payment_cycle || 'month',
         phone_number  || '',
+        JSON.stringify(amenities),
         req.user.id,
         'approved',
         'available',
@@ -610,6 +618,10 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
       description, deposit, bedrooms, bathrooms,
       payment_cycle, phone_number, mpesa_number,
     } = req.body;
+    const hasAmenities = Object.prototype.hasOwnProperty.call(req.body, 'amenities');
+    const amenities = hasAmenities ? normalizeAmenities(req.body.amenities) : null;
+    if (hasAmenities && amenities === null)
+      return res.status(400).json({ message: 'amenities must be an array of strings' });
 
     // Cloudinary returns full URLs in req.files[].path
     const imagePath = req.files?.length
@@ -633,6 +645,7 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
     }
 
     if (imagePath) { sql += ', image_path=?'; params.push(imagePath); }
+    if (hasAmenities) { sql += ', amenities=?'; params.push(JSON.stringify(amenities)); }
     sql += req.user.role === 'admin' ? ' WHERE id=?' : ' WHERE id=? AND landlord_id=?';
     params.push(req.params.id);
     if (req.user.role === 'landlord') params.push(req.user.id);
@@ -824,7 +837,7 @@ app.get('/api/admin/listings', protect, authorize('admin'), async (req, res) => 
       ORDER BY p.created_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
-    res.json(paginated(rows, page, limit));
+    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
   } catch (err) {
     console.error('Admin listings error:', err);
     res.status(500).json({ message: 'Unable to load listings' });
@@ -895,7 +908,7 @@ app.get('/api/favorites', protect, async (req, res) => {
       WHERE f.user_id = ? AND p.payment_status='paid' AND p.status='available'
       ORDER BY f.id DESC LIMIT ${limit} OFFSET ${offset}
     `, [req.user.id]);
-    res.json(paginated(rows, page, limit));
+    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
   } catch (err) {
     console.error('GET /favorites error:', err);
     res.status(500).json({ message: 'Unable to load favorites' });

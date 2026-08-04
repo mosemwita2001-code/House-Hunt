@@ -2,6 +2,7 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
 
 const Home = lazy(() => import('./pages/Home'));
@@ -11,6 +12,8 @@ const PropertyDetails = lazy(() => import('./pages/propertyDetails'));
 const LandlordDashboard = lazy(() => import('./pages/LandlordDashboard'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Favorites = lazy(() => import('./pages/Favorites'));
+const Terms = lazy(() => import('./pages/Terms'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 
 function App() {
   return (
@@ -23,6 +26,8 @@ function App() {
           <Route path="/property/:id" element={<PropertyDetails />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
           
           {/* 2. ADD THE ADMIN ROUTE */}
@@ -45,6 +50,7 @@ function App() {
           />
         </Routes>
         </Suspense>
+        <Footer />
       </Router>
     </AuthProvider>
   );
