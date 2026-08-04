@@ -3,7 +3,7 @@
 There are two supported database paths:
 
 1. For a new local or staging database, load `datbase/house_hunting_fresh.sql` only. It already contains the schema expected by the current Express server, including `payments.view_access_token_hash`.
-2. For an existing database, take a backup and review the legacy reconciliation below against the actual columns and data. Then run `001`, `002`, `003`, `004`, and `005` once, in that order. These files are reviewable SQL only; this repository does not execute them against production.
+2. For an existing database, take a backup and review the legacy reconciliation below against the actual columns and data. Then run `001`, `002`, `003`, `004`, `005`, and `006` once, in that order. These files are reviewable SQL only; this repository does not execute them against production.
 
 The archived `datbase/house_hunting.sql` is not a valid direct starting point for `001`: its `properties.status` column means verification state (`pending/approved/rejected/rented`), while the current application uses `properties.verification_status` for moderation and `properties.status` for availability (`available/taken`). The existing inquiries table also stores a user id instead of the denormalized contact fields used by the current API. That is why the legacy-only preflight is required.
 
@@ -27,5 +27,8 @@ If the live schema is neither the archived schema nor the fresh schema, stop and
 - `003_query_performance_indexes.sql`: adds the public-listing and user-role indexes. It does not duplicate the payment index.
 - `004_view_access_token.sql`: adds `payments.view_access_token_hash` and its lookup index. The backend hashes the random token before comparing it; the raw token is never stored in MySQL.
 - `005_property_amenities.sql`: adds the nullable JSON `properties.amenities` column. Existing rows do not require a data migration.
+- `006_terms_acceptance.sql`: adds the registration terms acceptance flag and timestamp. Existing users remain valid with the default `FALSE` flag and no acceptance timestamp.
 
-Do not run `001`–`005` against `datbase/house_hunting_fresh.sql`; use the fresh schema as-is. Do not run either path against production without the human owner reviewing the actual Render database schema, backup, lock/maintenance timing, and rollback plan.
+The fresh schema already includes the terms acceptance columns, so migration `006` is only for existing databases.
+
+Do not run `001`–`006` against `datbase/house_hunting_fresh.sql`; use the fresh schema as-is. Do not run either path against production without the human owner reviewing the actual Render database schema, backup, lock/maintenance timing, and rollback plan.

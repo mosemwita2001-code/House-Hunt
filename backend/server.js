@@ -302,8 +302,10 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const password = String(req.body.password || '');
   const role = req.body.role || 'tenant';
+  const termsAccepted = req.body.terms_accepted === true;
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password are required' });
+  if (!termsAccepted) return res.status(400).json({ message: 'You must accept the Terms & Conditions and Privacy Policy to create an account.' });
   if (!EMAIL_RE.test(email)) return res.status(400).json({ message: 'Enter a valid email address' });
   if (password.length < 10 || password.length > 128) return res.status(400).json({ message: 'Password must be between 10 and 128 characters' });
   if (!['tenant', 'landlord'].includes(role)) return res.status(400).json({ message: 'Invalid account role' });
@@ -314,8 +316,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const hashed   = await bcrypt.hash(password, 10);
     const safeRole = role;
     const [result] = await db.execute(
-      'INSERT INTO users (name, email, password, role, account_status) VALUES (?,?,?,?,?)',
-      [name, email, hashed, safeRole, 'active']
+      'INSERT INTO users (name, email, password, role, account_status, terms_accepted, terms_accepted_at) VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP)',
+      [name, email, hashed, safeRole, 'active', true]
     );
     const token = signToken({ id: result.insertId, role: safeRole });
     res.status(201).json({ token, user: { id: result.insertId, name, email, role: safeRole } });

@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import API from '../services/api';
 
 export default function Register() {
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'tenant' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'tenant', terms_accepted: false });
   const [formError, setFormError] = useState('');
   const navigate = useNavigate();
 
@@ -12,6 +12,10 @@ export default function Register() {
     setFormError('');
     if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
       setFormError('Please fill in all required fields first.');
+      return;
+    }
+    if (!formData.terms_accepted) {
+      setFormError('You must accept the Terms & Conditions and Privacy Policy to create an account.');
       return;
     }
     try {
@@ -40,6 +44,12 @@ export default function Register() {
           <option value="tenant">Tenant</option>
           <option value="landlord">Landlord</option>
         </select>
+        <label htmlFor="register-terms" className="flex items-start gap-2 text-sm leading-5 text-slate-600">
+          <input id="register-terms" name="terms_accepted" type="checkbox" required className="mt-1" checked={formData.terms_accepted} onChange={(e) => setFormData({...formData, terms_accepted: e.target.checked})} />
+          <span>
+            I have read and agree to the <Link to="/terms" className="text-brand hover:text-brand-dark">Terms &amp; Conditions</Link> and <Link to="/privacy-policy" className="text-brand hover:text-brand-dark">Privacy Policy</Link>.
+          </span>
+        </label>
         {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
         <button type="submit" className="w-full bg-blue-600 text-white p-2">Register</button>
         <p className="text-center text-xs leading-5 text-slate-500">
