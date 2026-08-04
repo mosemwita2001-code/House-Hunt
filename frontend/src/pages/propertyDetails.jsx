@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import API from '../services/api';
 import { Phone, MapPin, MessageCircle, ImageOff, Send, Lock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { viewAccessHeaders, viewAccessStorageKey } from '../utils/viewAccess';
+import { optimizeImageUrl } from '../utils/imageUrl';
 
 const cleanPhone = (phone = '') => phone.replace(/\D/g, '').replace(/^0/, '254');
 const sessionUser = () => { try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch { return null; } };
@@ -132,7 +133,8 @@ export default function PropertyDetails() {
     else goToNextImage();
   };
   const currentImageName = images[currentImage] || images[0];
-  const currentImageSrc = currentImageName?.startsWith('http') ? currentImageName : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}/uploads/${currentImageName}`;
+  const currentImageUrl = currentImageName?.startsWith('http') ? currentImageName : `${import.meta.env.VITE_API_URL?.replace('/api','') || 'http://localhost:5000'}/uploads/${currentImageName}`;
+  const currentImageSrc = optimizeImageUrl(currentImageUrl, { width: 1600 });
   const maxGalleryHeight = (galleryViewportHeight || window.innerHeight) * 0.85;
   const galleryWidth = galleryAvailableWidth ? Math.min(galleryAvailableWidth, maxGalleryHeight * imageAspectRatio) : undefined;
   const galleryHeight = galleryWidth ? galleryWidth / imageAspectRatio : undefined;

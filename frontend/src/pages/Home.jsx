@@ -4,6 +4,7 @@ import { MessageCircle, X } from 'lucide-react';
 import API from '../services/api.js';
 import { AuthContext } from '../context/AuthContext';
 import WhatsAppIcon from '../components/WhatsAppIcon.jsx';
+import { optimizeImageUrl } from '../utils/imageUrl';
 
 const HOUSE_TYPES = [
   "Bedsitter","Single Room","One Bedroom","Two Bedroom","Three Bedroom",
@@ -32,7 +33,7 @@ const getFirstImage = (image_path) => {
   const first = image_path.split(',')[0].trim();
   if (!first) return null;
   return first.startsWith('http')
-    ? first
+    ? optimizeImageUrl(first, { width: 800 })
     : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}/uploads/${first}`;
 };
 
@@ -52,7 +53,6 @@ const getAmenities = value => {
 export default function Home() {
   const { user } = useContext(AuthContext);
   const [properties, setProperties]   = useState([]);
-  const [filtered, setFiltered]       = useState([]);
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [search, setSearch]           = useState('');
@@ -83,7 +83,6 @@ export default function Home() {
         } });
         const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
         setProperties(data);
-        setFiltered(data);
         setPagination(response.data?.pagination || { page, limit: 24, hasMore: data.length === 24 });
         setError(null);
       } catch (err) {
@@ -348,7 +347,7 @@ backgroundPosition: 'center',
               {hasFilters ? 'Search Results' : 'Featured Properties'}
             </h2>
             <p style={{ color: '#9ca3af', fontSize: 13, marginTop: 4 }}>
-              {loading ? 'Loading...' : `${filtered.length} ${filtered.length === 1 ? 'property' : 'properties'} found`}
+              {loading ? 'Loading...' : `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} found`}
             </p>
           </div>
         </div>
@@ -377,7 +376,7 @@ backgroundPosition: 'center',
         )}
 
         {/* No results */}
-        {!loading && filtered.length === 0 && (
+        {!loading && properties.length === 0 && (
           <div style={{ textAlign: 'center', padding: '80px 0' }}>
             <div style={{ fontSize: 48, marginBottom: 16 }}>🏠</div>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: '#374151', marginBottom: 8 }}>No properties found</h3>
@@ -389,9 +388,9 @@ backgroundPosition: 'center',
         )}
 
         {/* Property Grid */}
-        {!loading && filtered.length > 0 && (
+        {!loading && properties.length > 0 && (
           <div className="home-property-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 24 }}>
-            {filtered.map((house, i) => {
+            {properties.map((house, i) => {
               const imageUrl = getFirstImage(house.image_path);
               const amenities = getAmenities(house.amenities);
               const isHovered = hoveredId === house.id;

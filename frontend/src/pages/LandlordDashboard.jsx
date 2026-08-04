@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
+import { optimizeImageUrl } from "../utils/imageUrl";
 import {
   LayoutDashboard, Home, PlusSquare, MessageSquare, User, LogOut,
   Menu, X, Bell, ChevronRight, Building2, MapPin, Bed, Bath,
@@ -34,9 +35,12 @@ const propertyImage = (p, size = "400x260") => {
   if (p.image_path) {
     // image_path is comma-separated — take only the first filename
     const first = p.image_path.split(',')[0].trim();
-    if (first) return first.startsWith("http") ? first : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${first}`;
+    if (first) {
+      const imageUrl = first.startsWith("http") ? first : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${first}`;
+      return optimizeImageUrl(imageUrl, { width: Number(size.split("x")[0]) * 2 });
+    }
   }
-  return p.images?.[0]?.image_url || `https://placehold.co/${size}/1a1a2e/444?text=No+Image`;
+  return optimizeImageUrl(p.images?.[0]?.image_url, { width: Number(size.split("x")[0]) * 2 }) || `https://placehold.co/${size}/1a1a2e/444?text=No+Image`;
 };
 
 const parseAmenities = value => {
@@ -58,7 +62,7 @@ const normalizeProperty = (p) => ({
   rentPeriod:  p.payment_cycle || p.rentPeriod || "month",
   amenities:   parseAmenities(p.amenities),
   images:      p.images || (p.image_path
-    ? p.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` }))
+    ? p.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ image_url: optimizeImageUrl(n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`, { width: 1200 }) }))
     : []),
 });
 
@@ -260,7 +264,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
   }));
   const [previews, setPreviews] = useState(() => {
     if (initial?.images?.length) return initial.images.map(i => i.image_url);
-    if (initial?.image_path) return initial.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`);
+    if (initial?.image_path) return initial.image_path.split(',').map(n => n.trim()).filter(Boolean).map(n => optimizeImageUrl(n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`, { width: 1200 }));
     return [];
   });
   const [newImages, setNewImages] = useState([]);

@@ -222,6 +222,13 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
+const setPublicCache = (req, res, cacheable) => {
+  res.set('Vary', 'Authorization, X-View-Access-Token');
+  res.set('Cache-Control', cacheable
+    ? 'public, max-age=30, s-maxage=60, stale-while-revalidate=30'
+    : 'private, no-store');
+};
+
 const publicFields = 'p.id, p.title, p.county, p.town, p.house_type, p.price, p.payment_cycle, p.image_path, p.amenities, p.status, p.bedrooms, p.bathrooms, p.created_at';
 const propertyWithAmenities = property => ({ ...property, amenities: amenitiesForResponse(property.amenities) });
 const isAdmin = req => req.user?.role === 'admin';
@@ -428,6 +435,7 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
        : ' ORDER BY p.created_at DESC';
     q += ` LIMIT ${limit} OFFSET ${offset}`;
     const [rows] = await executeReadWithRetry(q, params);
+    setPublicCache(req, res, !req.user);
     res.json(paginated(rows.map(propertyWithAmenities), page, limit));
   } catch (err) {
     console.error('GET /properties error:', err);
@@ -460,6 +468,7 @@ app.get('/api/properties/:id', optionalAuth, async (req, res) => {
       safe.description = property.description;
       safe.phone_number = property.phone_number;
     }
+    setPublicCache(req, res, !req.user && !req.headers['x-view-access-token'] && !req.query.view_token && !full);
     res.json(safe);
   } catch (err) {
     console.error('Database error:', err);

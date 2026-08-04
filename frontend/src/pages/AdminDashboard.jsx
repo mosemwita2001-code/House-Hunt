@@ -15,12 +15,13 @@ import {
   getAllPayments,
   resolvePayment,
 } from "../services/api";
+import { optimizeImageUrl } from "../utils/imageUrl";
 
 const normalizeListing = (listing) => ({
   ...listing,
   status: listing.verification_status === "approved" ? "active" : listing.verification_status || listing.status || "pending",
   landlord: listing.landlord || listing.landlord_name || "Landlord",
-  images: listing.images || (listing.image_path ? listing.image_path.split(",").map(n => n.trim()).filter(Boolean).map(n => ({ image_url: n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}` })) : []),
+  images: listing.images || (listing.image_path ? listing.image_path.split(",").map(n => n.trim()).filter(Boolean).map(n => ({ image_url: optimizeImageUrl(n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`, { width: 88 }) })) : []),
 });
 
 function PageControls({ label, page, hasMore, onPage }) {
