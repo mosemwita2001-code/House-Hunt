@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { getRegistrationErrorMessage } from '../utils/registrationError';
 
 export default function Register() {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'tenant', terms_accepted: false });
@@ -28,7 +29,7 @@ export default function Register() {
       navigate('/login');
     } catch (err) {
       console.error(err);
-      setFormError(err.response?.data?.message || 'Registration failed');
+      setFormError(getRegistrationErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
