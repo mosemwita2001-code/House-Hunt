@@ -16,6 +16,7 @@ import {
   resolvePayment,
 } from "../services/api";
 import { optimizeImageUrl } from "../utils/imageUrl";
+import LoadingSpinner from "../components/LoadingSpinner";
 
 const normalizeListing = (listing) => ({
   ...listing,
@@ -24,12 +25,12 @@ const normalizeListing = (listing) => ({
   images: listing.images || (listing.image_path ? listing.image_path.split(",").map(n => n.trim()).filter(Boolean).map(n => ({ image_url: optimizeImageUrl(n.startsWith("http") ? n : `${import.meta.env.VITE_API_URL?.replace("/api","") || "http://localhost:5000"}/uploads/${n}`, { width: 88 }) })) : []),
 });
 
-function PageControls({ label, page, hasMore, onPage }) {
+function PageControls({ label, page, hasMore, onPage, loading }) {
   if (page === 1 && !hasMore) return null;
   return <nav aria-label={`${label} pages`} style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, padding: 20 }}>
-    <button type="button" disabled={page === 1} onClick={() => onPage(Math.max(1, page - 1))} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.8)", cursor: page === 1 ? "not-allowed" : "pointer", opacity: page === 1 ? 0.5 : 1 }}>Previous</button>
+    <button type="button" disabled={page === 1 || loading} aria-busy={loading} onClick={() => onPage(Math.max(1, page - 1))} style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.8)", cursor: page === 1 || loading ? "not-allowed" : "pointer", opacity: page === 1 || loading ? 0.5 : 1 }}>{loading ? <><LoadingSpinner size={13} /> Loading...</> : "Previous"}</button>
     <span style={{ color: "rgba(255,255,255,0.7)", fontSize: 12 }}>Page {page}</span>
-    <button type="button" disabled={!hasMore} onClick={() => onPage(page + 1)} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#7c3aed", color: "white", cursor: hasMore ? "pointer" : "not-allowed", opacity: hasMore ? 1 : 0.5 }}>Next</button>
+    <button type="button" disabled={!hasMore || loading} aria-busy={loading} onClick={() => onPage(page + 1)} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "#7c3aed", color: "white", cursor: !hasMore || loading ? "not-allowed" : "pointer", opacity: !hasMore || loading ? 0.5 : 1 }}>{loading ? <><LoadingSpinner size={13} /> Loading...</> : "Next"}</button>
   </nav>;
 }
 
@@ -54,12 +55,14 @@ export default function AdminDashboard() {
   const [usersPagination, setUsersPagination] = useState({ hasMore: false });
   const [listingsPagination, setListingsPagination] = useState({ hasMore: false });
   const [paymentsPagination, setPaymentsPagination] = useState({ hasMore: false });
+  const [actionLoading, setActionLoading] = useState("");
+  const [pageLoading, setPageLoading] = useState("");
 
   // Get active admin info from local storage session
   const adminUser = JSON.parse(localStorage.getItem("user") || "null") || { name: "Administrator", email: "admin@system.com" };
   const displayInitial = adminUser.name ? adminUser.name.charAt(0).toUpperCase() : "A";
 
-  // LOAD DATA DIRECTLY FROM MYSQL ENDPOINTS
+  // LOAD DASHBOARD DATA
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -79,14 +82,15 @@ export default function AdminDashboard() {
       setListingsPagination(listingsRes.data?.pagination || { hasMore: false });
       setPaymentsPagination(paymentsRes.data?.pagination || { hasMore: false });
     } catch (err) {
-      console.error("Database connection failure:", err);
-      setError(err.response?.data?.message || "Failed to establish a secure link with MySQL.");
+      console.error("Dashboard data load failure:", err);
+      setError(err.response?.data?.message || "Unable to load dashboard data.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   const loadPage = async (kind, nextPage) => {
+    setPageLoading(kind);
     try {
       const params = { page: nextPage, limit: 24 };
       if (kind === "users") {
@@ -101,6 +105,8 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       setError(err.response?.data?.message || "Unable to load this page.");
+    } finally {
+      setPageLoading("");
     }
   };
 
@@ -111,40 +117,52 @@ export default function AdminDashboard() {
   // USER INTERACTION HANDLERS
   const handleToggleUserStatus = async (id, currentStatus) => {
     const nextStatus = currentStatus === "active" ? "suspended" : "active";
+    setActionLoading(`user-status-${id}`);
     try {
       await updateUserStatus(id, nextStatus);
       setUsers(users.map(u => u.id === id ? { ...u, status: nextStatus, account_status: nextStatus } : u));
     } catch (err) {
-      alert(err.response?.data?.message || "Status change rejected by server.");
+      alert(err.response?.data?.message || "Status change was rejected.");
+    } finally {
+      setActionLoading("");
     }
   };
 
   const handleDeleteUserClick = async (id) => {
-    if (!window.confirm("Are you certain you want to remove this profile permanently from MySQL?")) return;
+    if (!window.confirm("Are you certain you want to remove this profile permanently?")) return;
+    setActionLoading(`user-delete-${id}`);
     try {
       await deleteUser(id);
       setUsers(users.filter(u => u.id !== id));
     } catch (err) {
       alert(err.response?.data?.message || "Deletion request denied.");
+    } finally {
+      setActionLoading("");
     }
   };
 
   const handleUpdateListingStatus = async (id, targetStatus) => {
+    setActionLoading(`listing-status-${id}`);
     try {
       await updateListingStatus(id, targetStatus);
       setListings(listings.map(l => l.id === id ? { ...l, status: targetStatus, verification_status: targetStatus } : l));
     } catch (err) {
       alert(err.response?.data?.message || "Listing alteration failed.");
+    } finally {
+      setActionLoading("");
     }
   };
 
   const handleDeleteListingClick = async (id) => {
     if (!window.confirm("Delete this housing listing item?")) return;
+    setActionLoading(`listing-delete-${id}`);
     try {
       await deleteListing(id);
       setListings(listings.filter(l => l.id !== id));
     } catch (err) {
       alert(err.response?.data?.message || "Listing removal failed.");
+    } finally {
+      setActionLoading("");
     }
   };
 
@@ -182,7 +200,7 @@ export default function AdminDashboard() {
     return (
       <div style={{ height: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#0b0f19", color: "white", gap: 12 }}>
         <Loader2 size={32} className="animate-spin" color="#7c3aed" />
-        <p style={{ opacity: 0.7, fontSize: 14 }}>Connecting to MySQL Cluster...</p>
+        <p style={{ opacity: 0.7, fontSize: 14 }}>Loading dashboard...</p>
       </div>
     );
   }
@@ -193,7 +211,7 @@ export default function AdminDashboard() {
         <AlertTriangle size={48} color="#ef4444" />
         <h2 style={{ fontSize: 20, fontWeight: 600 }}>Access Authorization Interrupted</h2>
         <p style={{ opacity: 0.7, fontSize: 14, maxWidth: 400, textAlign: "center" }}>{error}</p>
-        <button onClick={loadDashboardData} style={{ background: "#7c3aed", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontWeight: 500 }}>Retry Connection</button>
+        <button onClick={loadDashboardData} disabled={loading} aria-busy={loading} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#7c3aed", color: "white", border: "none", padding: "10px 20px", borderRadius: 8, cursor: loading ? "not-allowed" : "pointer", fontWeight: 500, opacity: loading ? 0.6 : 1 }}>{loading && <LoadingSpinner size={14} />}{loading ? "Loading..." : "Try Again"}</button>
       </div>
     );
   }
@@ -345,12 +363,12 @@ export default function AdminDashboard() {
                         <td style={{ padding: "18px 24px", textAlign: "right" }}>
                           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                             {user.role !== "admin" && (
-                              <button type="button" aria-label={userStatus === "active" ? "Suspend account" : "Activate account"} onClick={() => handleToggleUserStatus(user.id, userStatus)} title={userStatus === "active" ? "Suspend Account" : "Activate Account"} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", padding: 6, borderRadius: 8, color: "rgba(255,255,255,0.6)", cursor: "pointer" }}>
-                                {userStatus === "active" ? <UserX size={15} color="#ef4444" /> : <UserCheck size={15} color="#10b981" />}
+                              <button type="button" disabled={actionLoading === `user-status-${user.id}`} aria-busy={actionLoading === `user-status-${user.id}`} aria-label={userStatus === "active" ? "Suspend account" : "Activate account"} onClick={() => handleToggleUserStatus(user.id, userStatus)} title={userStatus === "active" ? "Suspend Account" : "Activate Account"} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", padding: 6, borderRadius: 8, color: "rgba(255,255,255,0.6)", cursor: "pointer", opacity: actionLoading === `user-status-${user.id}` ? 0.6 : 1 }}>
+                                {actionLoading === `user-status-${user.id}` ? <LoadingSpinner size={15} /> : (userStatus === "active" ? <UserX size={15} color="#ef4444" /> : <UserCheck size={15} color="#10b981" />)}
                               </button>
                             )}
-                            <button type="button" aria-label={`Delete user ${user.name || user.email}`} onClick={() => handleDeleteUserClick(user.id)} title="Delete Row Profile" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}>
-                              <Trash2 size={15} aria-hidden="true" />
+                              <button type="button" disabled={actionLoading === `user-delete-${user.id}`} aria-busy={actionLoading === `user-delete-${user.id}`} aria-label={`Delete user ${user.name || user.email}`} onClick={() => handleDeleteUserClick(user.id)} title="Delete Row Profile" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer", opacity: actionLoading === `user-delete-${user.id}` ? 0.6 : 1 }}>
+                              {actionLoading === `user-delete-${user.id}` ? <LoadingSpinner size={15} /> : <Trash2 size={15} aria-hidden="true" />}
                             </button>
                           </div>
                         </td>
@@ -359,7 +377,7 @@ export default function AdminDashboard() {
                   })}
                 </tbody>
               </table>
-              <PageControls label="Admin users" page={usersPage} hasMore={usersPagination.hasMore} onPage={nextPage => loadPage("users", nextPage)} />
+              <PageControls label="Admin users" page={usersPage} hasMore={usersPagination.hasMore} loading={pageLoading === "users"} onPage={nextPage => loadPage("users", nextPage)} />
             </div>
           )}
 
@@ -417,19 +435,19 @@ export default function AdminDashboard() {
                       <td style={{ padding: "18px 24px" }}>
                         <div style={{ display: "flex", gap: 6 }}>
                           {(listing.status === "pending" || listing.status === "rejected") && (
-                            <button type="button" aria-label="Approve listing" onClick={() => handleUpdateListingStatus(listing.id, "approved")} title="Approve Listing" style={{ background: "rgba(16,185,129,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#34d399", cursor: "pointer" }}><CheckCircle size={15} aria-hidden="true" /></button>
+                            <button type="button" disabled={actionLoading === `listing-status-${listing.id}`} aria-busy={actionLoading === `listing-status-${listing.id}`} aria-label="Approve listing" onClick={() => handleUpdateListingStatus(listing.id, "approved")} title="Approve Listing" style={{ background: "rgba(16,185,129,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#34d399", cursor: "pointer" }}>{actionLoading === `listing-status-${listing.id}` ? <LoadingSpinner size={15} /> : <CheckCircle size={15} aria-hidden="true" />}</button>
                           )}
                           {(listing.status === "approved" || listing.status === "active") && (
-                            <button type="button" aria-label="Reject listing" onClick={() => handleUpdateListingStatus(listing.id, "rejected")} title="Reject / Deactivate Listing" style={{ background: "rgba(245,158,11,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#fbbf24", cursor: "pointer" }}><XCircle size={15} aria-hidden="true" /></button>
+                            <button type="button" disabled={actionLoading === `listing-status-${listing.id}`} aria-busy={actionLoading === `listing-status-${listing.id}`} aria-label="Reject listing" onClick={() => handleUpdateListingStatus(listing.id, "rejected")} title="Reject / Deactivate Listing" style={{ background: "rgba(245,158,11,0.1)", border: "none", padding: 6, borderRadius: 8, color: "#fbbf24", cursor: "pointer" }}>{actionLoading === `listing-status-${listing.id}` ? <LoadingSpinner size={15} /> : <XCircle size={15} aria-hidden="true" />}</button>
                           )}
-                          <button type="button" aria-label={`Delete listing ${listing.title}`} onClick={() => handleDeleteListingClick(listing.id)} title="Delete Listing Row" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}><Trash2 size={15} aria-hidden="true" /></button>
+                          <button type="button" disabled={actionLoading === `listing-delete-${listing.id}`} aria-busy={actionLoading === `listing-delete-${listing.id}`} aria-label={`Delete listing ${listing.title}`} onClick={() => handleDeleteListingClick(listing.id)} title="Delete Listing Row" style={{ background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.15)", padding: 6, borderRadius: 8, color: "#f87171", cursor: "pointer" }}>{actionLoading === `listing-delete-${listing.id}` ? <LoadingSpinner size={15} /> : <Trash2 size={15} aria-hidden="true" />}</button>
                         </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <PageControls label="Admin listings" page={listingsPage} hasMore={listingsPagination.hasMore} onPage={nextPage => loadPage("listings", nextPage)} />
+              <PageControls label="Admin listings" page={listingsPage} hasMore={listingsPagination.hasMore} loading={pageLoading === "listings"} onPage={nextPage => loadPage("listings", nextPage)} />
             </div>
           )}
 
@@ -439,7 +457,7 @@ export default function AdminDashboard() {
               <h2 style={{ marginTop: 0 }}>Payments</h2>
               {payments.map(payment => <div key={payment.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,.08)" }}><div><div>{payment.type} · KES {Number(payment.amount).toLocaleString()}</div><small style={{ opacity: .6 }}>{payment.property_title || payment.landlord_name || 'Platform'} · {payment.status}</small></div>{payment.status !== 'success' && <button onClick={async () => { await resolvePayment(payment.id); setPayments(ps => ps.map(p => p.id === payment.id ? { ...p, status: 'success' } : p)); }} style={{ background: "#7c3aed", color: "white", border: 0, borderRadius: 8, padding: "7px 10px", cursor: "pointer" }}>Resolve</button>}</div>)}
               {!payments.length && <p style={{ opacity: .6 }}>No payments recorded.</p>}
-              <PageControls label="Admin payments" page={paymentsPage} hasMore={paymentsPagination.hasMore} onPage={nextPage => loadPage("payments", nextPage)} />
+              <PageControls label="Admin payments" page={paymentsPage} hasMore={paymentsPagination.hasMore} loading={pageLoading === "payments"} onPage={nextPage => loadPage("payments", nextPage)} />
             </div>
           )}
 
@@ -476,7 +494,7 @@ export default function AdminDashboard() {
                           KES {averageRent.toLocaleString()}
                         </h3>
                         <p style={{ margin: 0, fontSize: "12px", color: "rgba(255,255,255,0.35)" }}>
-                          <span style={{ color: "#34d399" }}>●</span> Dynamic real-time database mean
+                          <span style={{ color: "#34d399" }}>●</span> Dynamic real-time average
                         </p>
                       </div>
 
@@ -503,9 +521,9 @@ export default function AdminDashboard() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
                     <div>
                       <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 600, color: "white" }}>Property Value Curve</h4>
-                      <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>Live vector plot based directly on prices saved in your MySQL tables</p>
+                      <p style={{ margin: "4px 0 0 0", fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>Live vector plot based directly on current property prices</p>
                     </div>
-                    <span style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "#34d399", background: "rgba(16,185,129,0.1)", padding: "4px 8px", borderRadius: "6px" }}>Live SQL Reactive</span>
+                    <span style={{ fontSize: "11px", fontWeight: 600, textTransform: "uppercase", color: "#34d399", background: "rgba(16,185,129,0.1)", padding: "4px 8px", borderRadius: "6px" }}>Live Updates</span>
                   </div>
 
                   {/* MATH ENGINE GENERATION BLOCK FOR NATIVE SVG VECTOR PATHS */}

@@ -2,10 +2,12 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import API from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Login() {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -16,8 +18,9 @@ export default function Login() {
       setFormError('Please enter your email and password first.');
       return;
     }
+    setSubmitting(true);
     try {
-      // 1. Sends request to http://localhost:5000/api/auth/login
+      // 1. Submit the login form.
       const res = await API.post('/auth/login', formData); //
       
       // 2. CRITICAL: Save token and user data to localStorage so api.js interceptor can attach it
@@ -29,7 +32,7 @@ export default function Login() {
       // 3. Save token/user info to global application context
       login(res.data.token, res.data.user); //
       
-      // 4. Redirect based on role fetched from MySQL database
+      // 4. Redirect based on the authenticated role
       if (res.data.user.role === 'admin') {
         navigate('/admin'); 
       } else if (res.data.user.role === 'landlord') {
@@ -39,8 +42,10 @@ export default function Login() {
       }
     } catch (err) {
       console.error(err); //
-      // Uses the 'message' key which matches server.js response format
+      // Display the message returned by the login request.
       setFormError(err.response?.data?.message || 'Login failed. Check your credentials.'); //
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -71,7 +76,10 @@ export default function Login() {
           onChange={(e) => setFormData({...formData, password: e.target.value})} 
         />
         {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
-        <button type="submit" className="w-full bg-green-600 text-white p-2">Login</button>
+        <button type="submit" disabled={submitting} aria-busy={submitting} className="flex w-full items-center justify-center gap-2 bg-green-600 text-white p-2 disabled:cursor-not-allowed disabled:opacity-70">
+          {submitting && <LoadingSpinner size={16} />}
+          {submitting ? 'Signing in...' : 'Login'}
+        </button>
       </form>
     </div>
   );

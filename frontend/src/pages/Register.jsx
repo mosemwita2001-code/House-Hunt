@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../services/api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function Register() {
   const [formData, setFormData] = useState({ name: '', email: '', password: '', role: 'tenant', terms_accepted: false });
   const [formError, setFormError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -18,14 +20,17 @@ export default function Register() {
       setFormError('You must accept the Terms & Conditions and Privacy Policy to create an account.');
       return;
     }
+    setSubmitting(true);
     try {
-      // This sends the data to http://localhost:5000/api/auth/register
+      // Submit the registration form.
       await API.post('/auth/register', formData);
       alert('Registration successful! Please login.');
       navigate('/login');
     } catch (err) {
       console.error(err);
       setFormError(err.response?.data?.message || 'Registration failed');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,7 +56,10 @@ export default function Register() {
           </span>
         </label>
         {formError && <p className="text-sm text-red-600" role="alert">{formError}</p>}
-        <button type="submit" className="w-full bg-blue-600 text-white p-2">Register</button>
+        <button type="submit" disabled={submitting} aria-busy={submitting} className="flex w-full items-center justify-center gap-2 bg-blue-600 text-white p-2 disabled:cursor-not-allowed disabled:opacity-70">
+          {submitting && <LoadingSpinner size={16} />}
+          {submitting ? 'Creating account...' : 'Register'}
+        </button>
         <p className="text-center text-xs leading-5 text-slate-500">
           By signing up, you agree to our <Link to="/terms" className="text-brand hover:text-brand-dark">Terms and Conditions</Link> and <Link to="/privacy-policy" className="text-brand hover:text-brand-dark">Privacy Policy</Link>
         </p>

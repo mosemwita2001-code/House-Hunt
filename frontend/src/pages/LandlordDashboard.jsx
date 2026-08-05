@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { optimizeImageUrl } from "../utils/imageUrl";
+import LoadingSpinner from "../components/LoadingSpinner";
 import {
   LayoutDashboard, Home, PlusSquare, MessageSquare, User, LogOut,
   Menu, X, Bell, ChevronRight, Building2, MapPin, Bed, Bath,
-  Edit2, Trash2, Eye, Search, Upload, Loader2, AlertTriangle,
+  Edit2, Trash2, Eye, Search, Upload, AlertTriangle,
   CheckCircle, XCircle, AlertCircle, Info, Lock, ArrowRight,
 } from "lucide-react";
 
@@ -133,7 +134,7 @@ function StatCard({ label, value, icon, color = "violet", loading }) {
 }
 
 // ─── Property card ────────────────────────────────────────────────────────────
-function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView }) {
+function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView, retryLoading, toggleLoading }) {
   const ss = property.status === "taken" ? STATUS_STYLE.inactive : STATUS_STYLE.active;
   return (
     <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, overflow: "hidden" }}>
@@ -159,9 +160,9 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView })
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {property.payment_status !== "paid" && <button onClick={() => onRetry(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: "pointer" }}>Pay KSh 400</button>}
-          <button onClick={() => onToggle(property)} style={{ flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: "pointer" }}>
-            Mark {property.status === "taken" ? "Available" : "Taken"}
+          {property.payment_status !== "paid" && <button disabled={retryLoading} aria-busy={retryLoading} onClick={() => onRetry(property)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: retryLoading ? "not-allowed" : "pointer", opacity: retryLoading ? 0.6 : 1 }}>{retryLoading && <LoadingSpinner size={12} />}{retryLoading ? "Starting..." : "Pay KSh 400"}</button>}
+          <button disabled={toggleLoading} aria-busy={toggleLoading} onClick={() => onToggle(property)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: toggleLoading ? "not-allowed" : "pointer", opacity: toggleLoading ? 0.6 : 1 }}>
+            {toggleLoading && <LoadingSpinner size={12} />}{toggleLoading ? "Updating..." : `Mark ${property.status === "taken" ? "Available" : "Taken"}`}
           </button>
           <button type="button" onClick={() => onView(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.8)", cursor: "pointer" }}>
             <Eye size={12} /> View
@@ -227,7 +228,7 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel, loading }) {
         <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onCancel} style={{ flex: 1, padding: "10px 0", borderRadius: 12, border: "1px solid rgba(255,255,255,0.1)", background: "none", color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
           <button type="button" onClick={onConfirm} disabled={loading} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 0", borderRadius: 12, border: "none", background: "#dc2626", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
-            {loading && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />} Delete
+            {loading && <LoadingSpinner size={13} />} {loading ? "Deleting..." : "Delete"}
           </button>
         </div>
       </div>
@@ -474,7 +475,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
         )}
         <button type="submit" disabled={loading}
           style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 24px", borderRadius: 12, border: "none", background: "#7c3aed", color: "white", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
-          {loading && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+          {loading && <LoadingSpinner size={14} />}
           {loading ? "Saving…" : "Save Property"}
         </button>
       </div>
@@ -586,6 +587,8 @@ function MyProperties({ addToast, onNavigate }) {
   const [deleting,     setDeleting]     = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
   const [saving,       setSaving]       = useState(false);
+  const [toggleLoading, setToggleLoading] = useState(null);
+  const [retryLoading, setRetryLoading] = useState(false);
   const [retryPayment, setRetryPayment] = useState({ property: null, phone: "", error: "" });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, hasMore: false });
@@ -642,11 +645,13 @@ function MyProperties({ addToast, onNavigate }) {
 
   const handleToggle = async property => {
     const next = property.status === "taken" ? "available" : "taken";
+    setToggleLoading(property.id);
     try {
       await API.patch(`/landlord/properties/${property.id}/status`, { status: next });
       setProperties(prev => prev.map(p => p.id === property.id ? { ...p, status: next } : p));
       addToast(`Property marked ${next}`, "success");
     } catch (err) { addToast(err.response?.data?.message || "Could not update status", "error"); }
+    finally { setToggleLoading(null); }
   };
 
   const handleRetry = property => {
@@ -658,11 +663,13 @@ function MyProperties({ addToast, onNavigate }) {
       setRetryPayment(p => ({ ...p, error: "Please enter your M-Pesa number first." }));
       return;
     }
+    setRetryLoading(true);
     try {
       const { data } = await API.post(`/landlord/properties/${retryPayment.property.id}/payment`, { phone: retryPayment.phone.trim() });
       if (data.payment?.redirect_url) window.location.href = data.payment.redirect_url;
       else throw new Error("Payment provider did not return a checkout link");
     } catch (err) { addToast(err.response?.data?.message || "Could not start payment", "error"); }
+    finally { setRetryLoading(false); }
   };
 
   // Edit view
@@ -731,7 +738,7 @@ function MyProperties({ addToast, onNavigate }) {
       ) : (
         <div className="landlord-property-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => (
-            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} onView={property => { window.location.href = `/property/${property.id}`; }} />
+            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} retryLoading={retryLoading && retryPayment.property?.id === p.id} toggleLoading={toggleLoading === p.id} onView={property => { window.location.href = `/property/${property.id}`; }} />
           ))}
         </div>
       )}
@@ -747,7 +754,7 @@ function MyProperties({ addToast, onNavigate }) {
         <label htmlFor="retry-payment-phone" style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 6 }}>M-Pesa number</label>
         <input id="retry-payment-phone" autoComplete="tel" value={retryPayment.phone} onChange={e => setRetryPayment(p => ({ ...p, phone: e.target.value, error: "" }))} placeholder="0712345678" style={inputStyle} onFocus={onFocus} onBlur={onBlur} />
         {retryPayment.error && <p style={{ fontSize: 12, color: "#f87171", margin: "8px 0 0" }} role="alert">{retryPayment.error}</p>}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={() => setRetryPayment({ property: null, phone: "", error: "" })} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>Cancel</button><button onClick={submitRetry} style={{ padding: "9px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 600, cursor: "pointer" }}>Continue to payment</button></div>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button onClick={() => setRetryPayment({ property: null, phone: "", error: "" })} disabled={retryLoading} style={{ padding: "9px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: retryLoading ? "not-allowed" : "pointer" }}>Cancel</button><button onClick={submitRetry} disabled={retryLoading} aria-busy={retryLoading} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 600, cursor: retryLoading ? "not-allowed" : "pointer", opacity: retryLoading ? 0.6 : 1 }}>{retryLoading && <LoadingSpinner size={13} />}{retryLoading ? "Starting..." : "Continue to payment"}</button></div>
       </div>}
 
       <ConfirmModal open={deleteModal.open} title="Delete Property" message="This will permanently remove the listing. This cannot be undone."
@@ -761,7 +768,7 @@ function AddProperty({ addToast, onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [paymentOption, setPaymentOption] = useState("listing");
   const [pendingPayment, setPendingPayment] = useState(null);
-  const [planLoading, setPlanLoading] = useState(false);
+  const [planLoading, setPlanLoading] = useState("");
 
   const handleSubmit = async (fd, formValues) => {
     setLoading(true);
@@ -787,7 +794,7 @@ function AddProperty({ addToast, onNavigate }) {
 
   const startPlanPayment = async (plan) => {
     if (!pendingPayment?.phone) return addToast("Enter an M-Pesa number before choosing a subscription.", "error");
-    setPlanLoading(true);
+    setPlanLoading(plan);
     try {
       const { data } = await API.post("/payments/plans", { plan, phone: pendingPayment.phone, property_id: pendingPayment.propertyId });
       if (!data.redirect_url) throw new Error("Payment provider did not return a checkout link");
@@ -795,7 +802,7 @@ function AddProperty({ addToast, onNavigate }) {
     } catch (err) {
       addToast(err.response?.data?.message || err.message || "Could not start subscription payment", "error");
     } finally {
-      setPlanLoading(false);
+      setPlanLoading("");
     }
   };
 
@@ -820,8 +827,8 @@ function AddProperty({ addToast, onNavigate }) {
             </div>
             {pendingPayment.payment?.redirect_url && <button onClick={() => { window.location.href = pendingPayment.payment.redirect_url; }} style={{ padding: "11px 16px", borderRadius: 10, border: "none", background: "#7c3aed", color: "white", fontWeight: 700, cursor: "pointer" }}>Complete listing payment with PesaPal</button>}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button disabled={planLoading} onClick={() => startPlanPayment("monthly")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: "pointer" }}>Choose monthly plan</button>
-              <button disabled={planLoading} onClick={() => startPlanPayment("semester")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: "pointer" }}>Choose semester plan</button>
+              <button disabled={Boolean(planLoading)} aria-busy={planLoading === "monthly"} onClick={() => startPlanPayment("monthly")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: planLoading ? "not-allowed" : "pointer", opacity: planLoading && planLoading !== "monthly" ? 0.6 : 1 }}>{planLoading === "monthly" && <LoadingSpinner size={13} />}{planLoading === "monthly" ? "Starting..." : "Choose monthly plan"}</button>
+              <button disabled={Boolean(planLoading)} aria-busy={planLoading === "semester"} onClick={() => startPlanPayment("semester")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(124,58,237,0.4)", background: "rgba(124,58,237,0.15)", color: "#c4b5fd", cursor: planLoading ? "not-allowed" : "pointer", opacity: planLoading && planLoading !== "semester" ? 0.6 : 1 }}>{planLoading === "semester" && <LoadingSpinner size={13} />}{planLoading === "semester" ? "Starting..." : "Choose semester plan"}</button>
               <button onClick={() => onNavigate("properties")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>View pending listing</button>
             </div>
           </div>
@@ -837,6 +844,7 @@ function Inquiries() {
   const [inquiries, setInquiries] = useState([]);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, hasMore: false });
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     API.get("/landlord/inquiries", { params: { page, limit: 24 } })
@@ -844,14 +852,17 @@ function Inquiries() {
       .catch(() => setInquiries([]));
   }, [page]);
 
-  // Delete the server record as well as removing it from this view.
+  // Delete the saved record as well as removing it from this view.
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this inquiry?")) {
+      setDeletingId(id);
       try {
         await API.delete(`/landlord/inquiries/${id}`);
         setInquiries(current => current.filter(q => q.id !== id));
       } catch (err) {
         window.alert(err.response?.data?.message || "Could not delete the inquiry.");
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -879,8 +890,8 @@ function Inquiries() {
                 </div>
                 
                 {/* DELETE BUTTON */}
-                <button onClick={() => handleDelete(q.id)} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "#ef4444", fontSize: 10, padding: "2px 8px", borderRadius: 6, cursor: "pointer" }}>
-                  Delete
+                <button disabled={deletingId === q.id} aria-busy={deletingId === q.id} onClick={() => handleDelete(q.id)} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "1px solid rgba(255,255,255,0.1)", color: "#ef4444", fontSize: 10, padding: "2px 8px", borderRadius: 6, cursor: deletingId === q.id ? "not-allowed" : "pointer", opacity: deletingId === q.id ? 0.6 : 1 }}>
+                  {deletingId === q.id && <LoadingSpinner size={10} />}{deletingId === q.id ? "Deleting..." : "Delete"}
                 </button>
               </div>
 
@@ -1003,7 +1014,7 @@ function Profile({ addToast }) {
           ))}
           <button type="submit" disabled={profileLoading}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none", background: "#7c3aed", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: profileLoading ? 0.5 : 1, width: "fit-content", marginTop: 4 }}>
-            {profileLoading && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />} Save Changes
+            {profileLoading && <LoadingSpinner size={13} />} {profileLoading ? "Saving..." : "Save Changes"}
           </button>
         </form>
       </div>
@@ -1023,7 +1034,7 @@ function Profile({ addToast }) {
           {passwordError && <p style={{ fontSize: 12, color: "#f87171", margin: 0 }} role="alert">{passwordError}</p>}
           <button type="submit" disabled={pwLoading}
             style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 20px", borderRadius: 12, border: "none", background: "#7c3aed", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: pwLoading ? 0.5 : 1, width: "fit-content", marginTop: 4 }}>
-            {pwLoading && <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} />} Update Password
+            {pwLoading && <LoadingSpinner size={13} />} {pwLoading ? "Updating..." : "Update Password"}
           </button>
         </form>
       </div>

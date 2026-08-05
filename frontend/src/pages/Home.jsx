@@ -5,6 +5,7 @@ import API from '../services/api.js';
 import { AuthContext } from '../context/AuthContext';
 import WhatsAppIcon from '../components/WhatsAppIcon.jsx';
 import { optimizeImageUrl } from '../utils/imageUrl';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const HOUSE_TYPES = [
   "Bedsitter","Single Room","One Bedroom","Two Bedroom","Three Bedroom",
@@ -87,7 +88,7 @@ export default function Home() {
         setError(null);
       } catch (err) {
         console.error("Fetch error:", err);
-        setError("Could not connect to the server.");
+        setError("Unable to load properties.");
       } finally {
         setLoading(false);
       }
@@ -226,6 +227,8 @@ backgroundPosition: 'center',
             </button>
             <button
               type="button"
+              disabled={loading}
+              aria-busy={loading}
               onClick={() => { setSearch(searchInput.trim()); setPage(1); }}
               style={{
                 background: 'linear-gradient(135deg, #1a1a2e, #0f3460)',
@@ -234,7 +237,7 @@ backgroundPosition: 'center',
                 cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
               }}
             >
-              Search
+              {loading && <LoadingSpinner size={14} />} {loading ? 'Loading...' : 'Search'}
             </button>
           </div>
 
@@ -305,8 +308,8 @@ backgroundPosition: 'center',
             {hasFilters && (
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'transparent', marginBottom: 6 }}>_</label>
-                <button onClick={clearFilters} style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#ef4444', background: '#fef2f2', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  Clear Filters
+                <button onClick={clearFilters} disabled={loading} aria-busy={loading} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', padding: '10px 12px', border: '1.5px solid #fca5a5', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#ef4444', background: '#fef2f2', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                  {loading && <LoadingSpinner size={13} />} {loading ? 'Loading...' : 'Clear Filters'}
                 </button>
               </div>
             )}
@@ -321,6 +324,8 @@ backgroundPosition: 'center',
           {HOUSE_TYPES.slice(0, 8).map(type => (
             <button
               key={type}
+              disabled={loading}
+              aria-busy={loading}
               onClick={() => setHouseType(houseType === type ? '' : type)}
               style={{
                 padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 500,
@@ -328,7 +333,7 @@ backgroundPosition: 'center',
                 background: houseType === type ? '#1a1a2e' : 'white',
                 color: houseType === type ? 'white' : '#6b7280',
                 cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
-                transition: 'all 0.15s',
+                transition: 'all 0.15s', opacity: loading ? 0.6 : 1,
               }}
             >
               {type}
@@ -381,8 +386,8 @@ backgroundPosition: 'center',
             <div style={{ fontSize: 48, marginBottom: 16 }}>🏠</div>
             <h3 style={{ fontSize: 20, fontWeight: 600, color: '#374151', marginBottom: 8 }}>No properties found</h3>
             <p style={{ color: '#9ca3af', marginBottom: 24 }}>Try adjusting your search or filters</p>
-            <button onClick={clearFilters} style={{ background: '#1a1a2e', color: 'white', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              Clear all filters
+            <button onClick={clearFilters} disabled={loading} aria-busy={loading} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#1a1a2e', color: 'white', border: 'none', borderRadius: 12, padding: '12px 24px', fontSize: 14, fontWeight: 600, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: loading ? 0.6 : 1 }}>
+              {loading && <LoadingSpinner size={14} />} {loading ? 'Loading...' : 'Clear all filters'}
             </button>
           </div>
         )}
@@ -514,9 +519,9 @@ backgroundPosition: 'center',
 
         {!loading && (page > 1 || pagination.hasMore) && (
           <nav aria-label="Property results pages" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 32 }}>
-            <button type="button" disabled={page === 1} onClick={() => setPage(current => Math.max(1, current - 1))} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: page === 1 ? '#f3f4f6' : 'white', color: '#374151', cursor: page === 1 ? 'not-allowed' : 'pointer' }}>Previous</button>
+            <button type="button" disabled={page === 1 || loading} aria-busy={loading} onClick={() => setPage(current => Math.max(1, current - 1))} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: page === 1 ? '#f3f4f6' : 'white', color: '#374151', cursor: page === 1 || loading ? 'not-allowed' : 'pointer' }}>{loading && <LoadingSpinner size={13} />} {loading ? 'Loading...' : 'Previous'}</button>
             <span style={{ color: '#6b7280', fontSize: 13 }}>Page {page}</span>
-            <button type="button" disabled={!pagination.hasMore} onClick={() => setPage(current => current + 1)} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #1a1a2e', background: pagination.hasMore ? '#1a1a2e' : '#f3f4f6', color: pagination.hasMore ? 'white' : '#9ca3af', cursor: pagination.hasMore ? 'pointer' : 'not-allowed' }}>Next</button>
+            <button type="button" disabled={!pagination.hasMore || loading} aria-busy={loading} onClick={() => setPage(current => current + 1)} style={{ padding: '9px 16px', borderRadius: 10, border: '1px solid #1a1a2e', background: pagination.hasMore ? '#1a1a2e' : '#f3f4f6', color: pagination.hasMore ? 'white' : '#9ca3af', cursor: !pagination.hasMore || loading ? 'not-allowed' : 'pointer' }}>{loading && <LoadingSpinner size={13} />} {loading ? 'Loading...' : 'Next'}</button>
           </nav>
         )}
       </main>
