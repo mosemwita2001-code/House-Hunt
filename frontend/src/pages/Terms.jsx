@@ -18,7 +18,7 @@ export default function Terms() {
             <p className="mt-4">The Platform allows:</p>
             <ul className="list-disc space-y-2 pl-6">
               <li>Visitors to browse available property listings without creating an account.</li>
-              <li>Landlords to create accounts, publish rental property listings after paying the applicable listing fee, and manage those listings.</li>
+              <li>Landlords to create accounts, submit rental property listings for admin approval, and manage those listings.</li>
               <li>Tenants to create accounts and pay to unlock detailed property information available through the Platform.</li>
             </ul>
             <p className="mt-4">Keja Hunt is not a landlord, property owner, property manager, estate agent, broker, or party to any tenancy agreement entered into between users.</p>
@@ -60,7 +60,7 @@ export default function Terms() {
               <li>Upload property photos.</li>
               <li>Receive enquiries from interested tenants.</li>
             </ul>
-            <p className="mt-4">A property listing will only become visible after the required listing fee has been successfully paid.</p>
+            <p className="mt-4">A property listing becomes visible after it has been reviewed and approved by an administrator.</p>
             <p className="mt-4">Landlords remain solely responsible for every listing they publish.</p>
             <hr className="my-8 border-slate-200" />
             <p>Administrator accounts are not available through public registration and are granted only internally by Keja Hunt.</p>

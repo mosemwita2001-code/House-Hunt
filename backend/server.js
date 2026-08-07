@@ -28,6 +28,7 @@ const storage = new CloudinaryStorage({
     folder:          'house-hunting',
     allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
     transformation:  [{ width: 1200, quality: 'auto' }],
+    timeout:         Number(process.env.CLOUDINARY_UPLOAD_TIMEOUT_MS) || 120000,
   },
 });
 
@@ -47,9 +48,24 @@ const upload = multer({
   },
 });
 
+const uploadRoomTypeImages = (req, res, next) => {
+  upload.array('images', 10)(req, res, error => {
+    if (!error) return next();
+    console.error('Room image upload error:', error);
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'Each room-type photo must be 8 MB or smaller.'
+      : 'Room-type photo upload failed. The room type was not saved. Please try again.';
+    res.status(error.code === 'LIMIT_FILE_SIZE' ? 413 : 502).json({
+      message,
+      code: 'ROOM_TYPE_IMAGE_UPLOAD_FAILED',
+    });
+  });
+};
+
 const app  = express();
 const PORT = process.env.PORT || 5000;
 const isProduction = process.env.NODE_ENV === 'production';
+const PAYMENTS_ENABLED = String(process.env.PAYMENTS_ENABLED || 'false').toLowerCase() === 'true';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET must be configured');
@@ -229,12 +245,207 @@ const setPublicCache = (req, res, cacheable) => {
     : 'private, no-store');
 };
 
-const publicFields = 'p.id, p.title, p.county, p.town, p.house_type, p.price, p.payment_cycle, p.image_path, p.amenities, p.status, p.bedrooms, p.bathrooms, p.created_at';
+const ROOM_HOUSE_TYPES = new Set([
+  'Bedsitter', 'Single Room', 'One Bedroom', 'Two Bedroom',
+  'Three Bedroom', 'Four Bedroom', 'Penthouse', 'Studio',
+]);
+const ROOM_STATUSES = new Set(['available', 'taken']);
+const LISTING_TYPES = new Set(['single', 'multi_room']);
+const publicFields = 'p.id, p.title, p.county, p.town, p.house_type, p.price, p.payment_cycle, p.image_path, p.amenities, p.status, p.bedrooms, p.bathrooms, p.listing_type, p.created_at';
+const legacyPublicFields = publicFields.replace(', p.listing_type', '');
+const multiRoomVisibility = `
+        AND (
+          p.listing_type = 'single'
+          OR EXISTS (
+            SELECT 1
+            FROM room_types rt
+            JOIN rooms available_room
+              ON available_room.room_type_id = rt.id
+             AND available_room.status = 'available'
+            WHERE rt.property_id = p.id
+          )
+        )`;
 const propertyWithAmenities = property => ({ ...property, amenities: amenitiesForResponse(property.amenities) });
 const isAdmin = req => req.user?.role === 'admin';
 const isOwner = (req, property) => req.user?.role === 'landlord' && Number(req.user.id) === Number(property.landlord_id);
 
+function uploadedImageUrls(files = []) {
+  const urls = files.map(file => file.path);
+  if (urls.some(url => typeof url !== 'string' || !url.trim())) {
+    const error = new Error('Image upload did not return a URL');
+    error.code = 'ROOM_TYPE_IMAGE_UPLOAD_FAILED';
+    throw error;
+  }
+  return urls;
+}
+
+function validRoomQuantity(value) {
+  const quantity = Number(value ?? 1);
+  return Number.isInteger(quantity) && quantity >= 1 && quantity <= 100 ? quantity : null;
+}
+
+async function getRoomTypes(propertyId, includeUnavailableRooms = false) {
+  const roomJoin = includeUnavailableRooms
+    ? 'LEFT JOIN rooms r ON r.room_type_id = rt.id'
+    : "JOIN rooms r ON r.room_type_id = rt.id AND r.status = 'available'";
+  const availabilityFilter = includeUnavailableRooms
+    ? ''
+    : `AND EXISTS (
+         SELECT 1 FROM rooms available_room
+         WHERE available_room.room_type_id = rt.id
+           AND available_room.status = 'available'
+       )`;
+  const [rows] = await executeReadWithRetry(
+    `SELECT rt.id AS room_type_id, rt.property_id, rt.house_type, rt.price,
+            rt.description, rt.created_at AS room_type_created_at,
+            (SELECT COUNT(*)
+             FROM rooms available_room
+             WHERE available_room.room_type_id = rt.id
+               AND available_room.status = 'available') AS available_count,
+            r.id AS room_id, r.room_label, r.status AS room_status,
+            r.created_at AS room_created_at,
+            rti.id AS type_image_id, rti.image_url AS type_image_url,
+            rti.display_order AS type_image_display_order
+     FROM room_types rt
+     ${roomJoin}
+     LEFT JOIN room_type_images rti ON rti.room_type_id = rt.id
+     WHERE rt.property_id = ?
+       ${availabilityFilter}
+     ORDER BY rt.id ASC, r.id ASC, rti.display_order ASC, rti.id ASC`,
+    [propertyId],
+  );
+
+  const roomTypes = new Map();
+  for (const row of rows) {
+    let roomType = roomTypes.get(row.room_type_id);
+    if (!roomType) {
+      roomType = {
+        id: row.room_type_id,
+        property_id: row.property_id,
+        house_type: row.house_type,
+        price: row.price,
+        description: row.description,
+        created_at: row.room_type_created_at,
+        available_count: Number(row.available_count),
+        images: [],
+        rooms: [],
+      };
+      roomTypes.set(row.room_type_id, roomType);
+    }
+
+    let room = row.room_id === null ? null : roomType.rooms.find(item => item.id === row.room_id);
+    if (row.room_id !== null && !room) {
+      room = {
+        id: row.room_id,
+        room_label: row.room_label,
+        status: row.room_status,
+        created_at: row.room_created_at,
+      };
+      roomType.rooms.push(room);
+    }
+    if (row.type_image_id && !roomType.images.some(image => image.id === row.type_image_id)) {
+      roomType.images.push({
+        id: row.type_image_id,
+        image_url: row.type_image_url,
+        display_order: row.type_image_display_order,
+      });
+    }
+  }
+  return [...roomTypes.values()].map(roomType => ({
+    ...roomType,
+    sample_photo: roomType.images[0] || null,
+  }));
+}
+
+async function getPublicRoomTypes(propertyId) {
+  const [rows] = await executeReadWithRetry(
+    `SELECT rt.id AS room_type_id, rt.property_id, rt.house_type, rt.price,
+            rt.description, rt.created_at AS room_type_created_at,
+            (SELECT COUNT(*)
+             FROM rooms available_room
+             WHERE available_room.room_type_id = rt.id
+               AND available_room.status = 'available') AS available_count,
+            rti.id AS sample_image_id, rti.image_url AS sample_image_url,
+            rti.display_order AS sample_image_display_order
+     FROM room_types rt
+     LEFT JOIN room_type_images rti
+       ON rti.id = (
+         SELECT first_image.id
+         FROM room_type_images first_image
+         WHERE first_image.room_type_id = rt.id
+         ORDER BY first_image.display_order ASC, first_image.id ASC
+         LIMIT 1
+       )
+     WHERE rt.property_id = ?
+       AND EXISTS (
+         SELECT 1 FROM rooms available_room
+         WHERE available_room.room_type_id = rt.id
+           AND available_room.status = 'available'
+       )
+     ORDER BY rt.id ASC`,
+    [propertyId],
+  );
+
+  return rows.map(row => ({
+    id: row.room_type_id,
+    property_id: row.property_id,
+    house_type: row.house_type,
+    price: row.price,
+    description: row.description,
+    created_at: row.room_type_created_at,
+    available_count: Number(row.available_count),
+    sample_photo: row.sample_image_id ? {
+      id: row.sample_image_id,
+      image_url: row.sample_image_url,
+      display_order: row.sample_image_display_order,
+    } : null,
+  }));
+}
+
+async function getOwnedProperty(propertyId, user) {
+  const [[property]] = await db.execute(
+    `SELECT id, listing_type FROM properties
+     WHERE id=?${user.role === 'admin' ? '' : ' AND landlord_id=?'}
+     LIMIT 1`,
+    user.role === 'admin' ? [propertyId] : [propertyId, user.id],
+  );
+  return property || null;
+}
+
+async function getOwnedRoomType(roomTypeId, user) {
+  const [[roomType]] = await db.execute(
+    `SELECT rt.id, rt.property_id, rt.house_type, rt.price, rt.description,
+            p.listing_type
+     FROM room_types rt
+     JOIN properties p ON p.id = rt.property_id
+     WHERE rt.id=?${user.role === 'admin' ? '' : ' AND p.landlord_id=?'}
+     LIMIT 1`,
+    user.role === 'admin' ? [roomTypeId] : [roomTypeId, user.id],
+  );
+  return roomType || null;
+}
+
+async function getOwnedRoom(roomId, user) {
+  const [[room]] = await db.execute(
+    `SELECT r.id, r.room_type_id, r.room_label, r.status,
+            rt.property_id, p.listing_type
+     FROM rooms r
+     JOIN room_types rt ON rt.id = r.room_type_id
+     JOIN properties p ON p.id = rt.property_id
+     WHERE r.id=?${user.role === 'admin' ? '' : ' AND p.landlord_id=?'}
+     LIMIT 1`,
+    user.role === 'admin' ? [roomId] : [roomId, user.id],
+  );
+  return room || null;
+}
+
+function validRoomTypePrice(value) {
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 ? price : null;
+}
+
 async function hasPaidView(req, propertyId) {
+  if (!PAYMENTS_ENABLED) return true;
   if (isAdmin(req)) return true;
   const [[property]] = await db.execute('SELECT landlord_id FROM properties WHERE id=?', [propertyId]);
   if (property && req.user?.role === 'landlord' && Number(req.user.id) === Number(property.landlord_id)) return true;
@@ -415,17 +626,43 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
       SELECT ${publicFields}
       FROM properties p
       WHERE p.verification_status = 'approved' AND p.payment_status = 'paid'
+        ${multiRoomVisibility}
     `;
     const params = [];
     if (!isAdmin(req)) q += ` AND p.status = 'available'`;
     if (search) {
-      q += ' AND (p.title LIKE ? OR p.town LIKE ? OR p.county LIKE ? OR p.house_type LIKE ?)';
+      q += ` AND (
+        p.title LIKE ? OR p.town LIKE ? OR p.county LIKE ? OR p.house_type LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM room_types rt
+          JOIN rooms available_room
+            ON available_room.room_type_id = rt.id
+           AND available_room.status = 'available'
+          WHERE rt.property_id = p.id
+            AND rt.house_type LIKE ?
+        )
+      )`;
       const searchTerm = `%${trimText(search, 100)}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
     if (county)     { q += ' AND p.county = ?';     params.push(county); }
     if (town)       { q += ' AND p.town LIKE ?';     params.push(`%${town}%`); }
-    if (house_type) { q += ' AND p.house_type = ?';  params.push(house_type); }
+    if (house_type) {
+      q += ` AND (
+        p.house_type = ?
+        OR EXISTS (
+          SELECT 1
+          FROM room_types rt
+          JOIN rooms available_room
+            ON available_room.room_type_id = rt.id
+           AND available_room.status = 'available'
+          WHERE rt.property_id = p.id
+            AND rt.house_type = ?
+        )
+      )`;
+      params.push(house_type, house_type);
+    }
     if (bedrooms)   { q += ' AND p.bedrooms = ?';    params.push(bedrooms); }
     if (minPrice)   { q += ' AND p.price >= ?';      params.push(minPrice); }
     if (maxPrice)   { q += ' AND p.price <= ?';      params.push(maxPrice); }
@@ -434,9 +671,21 @@ app.get('/api/properties', optionalAuth, async (req, res) => {
        : sort === 'highest' ? ' ORDER BY p.price DESC'
        : ' ORDER BY p.created_at DESC';
     q += ` LIMIT ${limit} OFFSET ${offset}`;
-    const [rows] = await executeReadWithRetry(q, params);
+    let rows;
+    try {
+      [rows] = await executeReadWithRetry(q, params);
+    } catch (err) {
+      if (!['ER_BAD_FIELD_ERROR', 'ER_NO_SUCH_TABLE'].includes(err.code)) throw err;
+      const legacyQuery = q
+        .replace(`SELECT ${publicFields}`, `SELECT ${legacyPublicFields}`)
+        .replace(multiRoomVisibility, '');
+      [rows] = await executeReadWithRetry(legacyQuery, params);
+    }
     setPublicCache(req, res, !req.user);
-    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
+    res.json(paginated(rows.map(property => ({
+      ...propertyWithAmenities(property),
+      payments_enabled: PAYMENTS_ENABLED,
+    })), page, limit));
   } catch (err) {
     console.error('GET /properties error:', err);
     res.status(500).json({ message: 'Unable to load properties' });
@@ -457,16 +706,39 @@ app.get('/api/properties/:id', optionalAuth, async (req, res) => {
     const privileged = isAdmin(req) || isOwner(req, property);
     if (!privileged && (property.status === 'taken' || property.verification_status !== 'approved' || property.payment_status !== 'paid'))
       return res.status(404).json({ message: 'Property not found' });
+    if (!privileged && property.listing_type === 'multi_room') {
+      const [[visible]] = await executeReadWithRetry(
+        `SELECT p.id
+         FROM properties p
+         WHERE p.id=?
+           AND EXISTS (
+             SELECT 1
+             FROM room_types rt
+             JOIN rooms available_room
+               ON available_room.room_type_id = rt.id
+              AND available_room.status = 'available'
+             WHERE rt.property_id = p.id
+           )`,
+        [property.id],
+      );
+      if (!visible) return res.status(404).json({ message: 'Property not found' });
+    }
     const full = privileged || await hasPaidView(req, property.id);
     const safe = {
       id: property.id, title: property.title, county: property.county, town: property.town,
       house_type: property.house_type, price: property.price, payment_cycle: property.payment_cycle,
       image_path: property.image_path, amenities: amenitiesForResponse(property.amenities),
-      status: property.status, full_access: full,
+      status: property.status, listing_type: property.listing_type, full_access: full,
+      payments_enabled: PAYMENTS_ENABLED,
     };
     if (full) {
       safe.description = property.description;
       safe.phone_number = property.phone_number;
+    }
+    if (property.listing_type === 'multi_room') {
+      safe.room_types = privileged
+        ? await getRoomTypes(property.id, true)
+        : await getPublicRoomTypes(property.id);
     }
     setPublicCache(req, res, !req.user && !req.headers['x-view-access-token'] && !req.query.view_token && !full);
     res.json(safe);
@@ -517,14 +789,19 @@ app.get('/api/landlord/dashboard', protect, authorize('landlord'), async (req, r
   }
 });
 
-app.get('/api/landlord/my-properties', protect, authorize('landlord'), async (req, res) => {
+app.get('/api/landlord/my-properties', protect, authorize('landlord', 'admin'), async (req, res) => {
   try {
     const { page, limit, offset } = pagination(req.query);
+    const propertyFilter = req.user.role === 'admin' ? '' : ' WHERE landlord_id = ?';
+    const propertyParams = req.user.role === 'admin' ? [] : [req.user.id];
     const [rows] = await db.execute(
-      `SELECT * FROM properties WHERE landlord_id = ? ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
-      [req.user.id]
+      `SELECT * FROM properties${propertyFilter} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
+      propertyParams,
     );
-    res.json(paginated(rows.map(propertyWithAmenities), page, limit));
+    res.json(paginated(rows.map(property => ({
+      ...propertyWithAmenities(property),
+      payments_enabled: PAYMENTS_ENABLED,
+    })), page, limit));
   } catch (err) {
     console.error('My-properties error:', err);
     res.status(500).json({ message: 'Unable to load properties' });
@@ -537,7 +814,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
     const {
       title, county, town, house_type, price,
       description, deposit, bedrooms, bathrooms, payment_option = 'listing',
-      payment_cycle, phone_number, mpesa_number, amenities: rawAmenities = [],
+      payment_cycle, phone_number, mpesa_number, listing_type = 'single', amenities: rawAmenities = [],
     } = req.body;
 
     const amenities = normalizeAmenities(rawAmenities);
@@ -546,6 +823,8 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
 
     if (!title || !county || !town || !house_type || !price)
       return res.status(400).json({ message: 'title, county, town, house_type and price are required' });
+    if (!LISTING_TYPES.has(listing_type))
+      return res.status(400).json({ message: 'listing_type must be single or multi_room' });
 
     // Cloudinary returns full URLs in req.files[].path
     const imagePath = req.files?.length
@@ -554,7 +833,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
 
     if (!PLAN_OPTIONS[payment_option]) return res.status(400).json({ message: 'Invalid payment option' });
     const phone = mpesa_number || phone_number;
-    if (req.user.role !== 'admin' && !phone) return res.status(400).json({ message: 'An M-Pesa number is required for listing payment' });
+    if (PAYMENTS_ENABLED && req.user.role !== 'admin' && !phone) return res.status(400).json({ message: 'An M-Pesa number is required for listing payment' });
 
     // Only DB work is inside this transaction. It is committed and released
     // before the remote PesaPal request, preventing checkout from exhausting
@@ -566,15 +845,17 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
        WHERE id=? AND active_plan <> 'none' AND plan_expires_at > NOW()`,
       [req.user.id]
     );
-    const covered = req.user.role === 'admin' || plans.length > 0;
+    const covered = req.user.role === 'admin'
+      || !PAYMENTS_ENABLED
+      || plans.length > 0;
     const [result] = await connection.execute(
       `INSERT INTO properties
-        (title, county, town, house_type, price, description, deposit,
+        (title, county, town, house_type, listing_type, price, description, deposit,
          bedrooms, bathrooms, image_path, payment_cycle, phone_number,
          amenities, landlord_id, verification_status, status, payment_status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        title, county, town, house_type, Number(price),
+        title, county, town, house_type, listing_type, Number(price),
         description || '', Number(deposit) || 0,
         Number(bedrooms) || 1, Number(bathrooms) || 1,
         imagePath,
@@ -582,7 +863,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
         phone_number  || '',
         JSON.stringify(amenities),
         req.user.id,
-        'approved',
+        PAYMENTS_ENABLED ? 'approved' : 'pending',
         'available',
         covered ? 'paid' : 'pending',
       ]
@@ -590,7 +871,12 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
     if (mpesa_number) await connection.execute('UPDATE users SET mpesa_number=? WHERE id=?', [mpesa_number, req.user.id]);
     if (covered) {
       await connection.commit();
-      return res.status(201).json({ message: 'Property created successfully', id: result.insertId, paymentRequired: false });
+      return res.status(201).json({
+        message: PAYMENTS_ENABLED ? 'Property created successfully' : 'Property submitted for admin approval',
+        id: result.insertId,
+        paymentRequired: false,
+        paymentsEnabled: PAYMENTS_ENABLED,
+      });
     }
     const option = PLAN_OPTIONS[payment_option];
     const payment = await createPendingPayment(connection, {
@@ -608,7 +894,7 @@ app.post('/api/landlord/properties', protect, authorize('landlord', 'admin'), up
         billingAddress: await getUserBillingAddress(req.user.id),
       });
       await executePaymentWriteWithRetry('UPDATE payments SET pesapal_order_tracking_id=? WHERE id=?', [order.order_tracking_id, payment.id]);
-      return res.status(201).json({ message: 'Payment required to activate property', id: result.insertId, paymentRequired: true, payment: { paymentId: payment.id, reference: payment.reference, ...order } });
+      return res.status(201).json({ message: 'Payment required to activate property', id: result.insertId, paymentRequired: true, paymentsEnabled: PAYMENTS_ENABLED, payment: { paymentId: payment.id, reference: payment.reference, ...order } });
     } catch (error) {
       await executePaymentWriteWithRetry("UPDATE payments SET status='failed' WHERE id=?", [payment.id]);
       throw error;
@@ -627,18 +913,21 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
     const {
       title, county, town, house_type, price,
       description, deposit, bedrooms, bathrooms,
-      payment_cycle, phone_number, mpesa_number,
+      payment_cycle, phone_number, mpesa_number, listing_type,
     } = req.body;
     const hasAmenities = Object.prototype.hasOwnProperty.call(req.body, 'amenities');
+    const hasListingType = Object.prototype.hasOwnProperty.call(req.body, 'listing_type');
     const amenities = hasAmenities ? normalizeAmenities(req.body.amenities) : null;
     if (hasAmenities && amenities === null)
       return res.status(400).json({ message: 'amenities must be an array of strings' });
+    if (hasListingType && !LISTING_TYPES.has(listing_type))
+      return res.status(400).json({ message: 'listing_type must be single or multi_room' });
 
     // Cloudinary returns full URLs in req.files[].path
     const imagePath = req.files?.length
       ? req.files.map(f => f.path).join(',')
       : null;
-    const plan = req.user.role === 'landlord' ? await activePlan(req.user.id) : null;
+    const plan = PAYMENTS_ENABLED && req.user.role === 'landlord' ? await activePlan(req.user.id) : null;
 
     const params = [
       title, county, town, house_type, Number(price),
@@ -652,9 +941,10 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
       payment_cycle=?, phone_number=?`;
     if (req.user.role === 'landlord') {
       sql += ', payment_status=?';
-      params.push(plan ? 'paid' : 'pending');
+      params.push(!PAYMENTS_ENABLED || plan ? 'paid' : 'pending');
     }
 
+    if (hasListingType) { sql += ', listing_type=?'; params.push(listing_type); }
     if (imagePath) { sql += ', image_path=?'; params.push(imagePath); }
     if (hasAmenities) { sql += ', amenities=?'; params.push(JSON.stringify(amenities)); }
     sql += req.user.role === 'admin' ? ' WHERE id=?' : ' WHERE id=? AND landlord_id=?';
@@ -666,12 +956,13 @@ app.put('/api/landlord/properties/:id', protect, authorize('landlord', 'admin'),
       return res.status(404).json({ message: 'Property not found or not yours' });
     if (mpesa_number && req.user.role === 'landlord') await db.execute('UPDATE users SET mpesa_number=? WHERE id=?', [mpesa_number, req.user.id]);
     if (req.user.role === 'admin') return res.json({ message: 'Property updated successfully' });
+    if (!PAYMENTS_ENABLED) return res.json({ message: 'Property updated successfully', paymentRequired: false });
     if (plan) {
       await db.execute("UPDATE properties SET payment_status='paid' WHERE id=?", [req.params.id]);
       return res.json({ message: 'Property updated successfully', paymentRequired: false });
     }
     const payment = await createPayment({
-      type: 'listing_fee', amount: 400,
+      type: 'listing_fee', amount: PLAN_OPTIONS.listing.amount,
       phone: mpesa_number || phone_number, propertyId: req.params.id, landlordId: req.user.id,
       description: `Listing renewal fee for property ${req.params.id}`,
       billingAddress: await getUserBillingAddress(req.user.id),
@@ -706,6 +997,235 @@ app.patch('/api/landlord/properties/:id/status', protect, async (req, res) => {
   } catch (err) { console.error('Property status error:', err); res.status(500).json({ message: 'Unable to update property status' }); }
 });
 
+/* ── MULTI-ROOM BUILDINGS ───────────────────────────────────────────────── */
+app.post('/api/properties/:id/room-types', protect, authorize('landlord', 'admin'), uploadRoomTypeImages, async (req, res) => {
+  let connection;
+  try {
+    const property = await getOwnedProperty(req.params.id, req.user);
+    if (!property) return res.status(404).json({ message: 'Property not found or not yours' });
+    if (property.listing_type !== 'multi_room')
+      return res.status(400).json({ message: 'Room types require a multi_room property' });
+
+    const houseType = trimText(req.body.house_type, 50);
+    const price = validRoomTypePrice(req.body.price);
+    if (!ROOM_HOUSE_TYPES.has(houseType))
+      return res.status(400).json({ message: 'Invalid room type house_type' });
+    if (price === null) return res.status(400).json({ message: 'A positive room type price is required' });
+
+    const description = req.body.description === undefined || req.body.description === null || req.body.description === ''
+      ? null
+      : trimText(req.body.description, 5000);
+    const imageUrls = uploadedImageUrls(req.files || []);
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    const [result] = await connection.execute(
+      `INSERT INTO room_types (property_id, house_type, price, description)
+       VALUES (?,?,?,?)`,
+      [property.id, houseType, price, description],
+    );
+    if (imageUrls.length) {
+      const values = imageUrls.map(() => '(?,?,?)').join(',');
+      const params = imageUrls.flatMap((image_url, display_order) => [result.insertId, image_url, display_order]);
+      await connection.execute(`INSERT INTO room_type_images (room_type_id, image_url, display_order) VALUES ${values}`, params);
+    }
+    await connection.commit();
+    res.status(201).json({
+      message: 'Room type created',
+      room_type: { id: result.insertId, property_id: property.id, house_type: houseType, price, description, images: imageUrls.map((image_url, display_order) => ({ image_url, display_order })), rooms: [] },
+    });
+  } catch (err) {
+    if (connection) await connection.rollback().catch(() => {});
+    if (err.code === 'ROOM_TYPE_IMAGE_UPLOAD_FAILED') {
+      return res.status(502).json({ message: 'Room-type photo upload failed. The room type was not saved. Please try again.', code: err.code });
+    }
+    console.error('Create room type error:', err);
+    res.status(500).json({ message: 'Unable to create room type' });
+  } finally {
+    connection?.release();
+  }
+});
+
+app.patch('/api/properties/:id/room-types/:roomTypeId', protect, authorize('landlord', 'admin'), uploadRoomTypeImages, async (req, res) => {
+  let connection;
+  try {
+    const roomType = await getOwnedRoomType(req.params.roomTypeId, req.user);
+    if (!roomType || Number(roomType.property_id) !== Number(req.params.id))
+      return res.status(404).json({ message: 'Room type not found or not yours' });
+    if (roomType.listing_type !== 'multi_room')
+      return res.status(400).json({ message: 'Room types require a multi_room property' });
+
+    const hasPrice = Object.prototype.hasOwnProperty.call(req.body, 'price');
+    const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const hasImages = (req.files || []).length > 0;
+    if (!hasPrice && !hasDescription && !hasImages)
+      return res.status(400).json({ message: 'price, description, or photos are required' });
+
+    const updates = [];
+    const params = [];
+    if (hasPrice) {
+      const price = validRoomTypePrice(req.body.price);
+      if (price === null) return res.status(400).json({ message: 'A positive room type price is required' });
+      updates.push('price=?');
+      params.push(price);
+    }
+    if (hasDescription) {
+      updates.push('description=?');
+      params.push(req.body.description === null || req.body.description === '' ? null : trimText(req.body.description, 5000));
+    }
+    params.push(roomType.id);
+    const imageUrls = hasImages ? uploadedImageUrls(req.files || []) : [];
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    if (updates.length) await connection.execute(`UPDATE room_types SET ${updates.join(', ')} WHERE id=?`, params);
+    if (hasImages) {
+      await connection.execute('DELETE FROM room_type_images WHERE room_type_id=?', [roomType.id]);
+      const values = imageUrls.map(() => '(?,?,?)').join(',');
+      const imageParams = imageUrls.flatMap((image_url, display_order) => [roomType.id, image_url, display_order]);
+      await connection.execute(`INSERT INTO room_type_images (room_type_id, image_url, display_order) VALUES ${values}`, imageParams);
+    }
+    await connection.commit();
+    res.json({ message: 'Room type updated' });
+  } catch (err) {
+    if (connection) await connection.rollback().catch(() => {});
+    if (err.code === 'ROOM_TYPE_IMAGE_UPLOAD_FAILED') {
+      return res.status(502).json({ message: 'Room-type photo upload failed. The room type was not updated. Please try again.', code: err.code });
+    }
+    console.error('Update room type error:', err);
+    res.status(500).json({ message: 'Unable to update room type' });
+  } finally {
+    connection?.release();
+  }
+});
+
+app.delete('/api/properties/:id/room-types/:roomTypeId', protect, authorize('landlord', 'admin'), async (req, res) => {
+  try {
+    const roomType = await getOwnedRoomType(req.params.roomTypeId, req.user);
+    if (!roomType || Number(roomType.property_id) !== Number(req.params.id))
+      return res.status(404).json({ message: 'Room type not found or not yours' });
+    const [result] = await db.execute('DELETE FROM room_types WHERE id=?', [roomType.id]);
+    if (!result.affectedRows) return res.status(404).json({ message: 'Room type not found or not yours' });
+    res.json({ message: 'Room type deleted' });
+  } catch (err) {
+    console.error('Delete room type error:', err);
+    res.status(500).json({ message: 'Unable to delete room type' });
+  }
+});
+
+app.post('/api/room-types/:roomTypeId/rooms', protect, authorize('landlord', 'admin'), async (req, res) => {
+  let connection;
+  try {
+    if (!req.is('application/json')) return res.status(415).json({ message: 'Room creation accepts JSON only; add photos to the room type.' });
+    const roomType = await getOwnedRoomType(req.params.roomTypeId, req.user);
+    if (!roomType) return res.status(404).json({ message: 'Room type not found or not yours' });
+    if (roomType.listing_type !== 'multi_room')
+      return res.status(400).json({ message: 'Rooms require a multi_room property' });
+
+    const quantity = validRoomQuantity(req.body.quantity);
+    if (quantity === null) return res.status(400).json({ message: 'quantity must be an integer between 1 and 100' });
+    const requestedLabel = trimText(req.body.room_label, 100);
+
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    const [existingRows] = await connection.execute(
+      'SELECT room_label FROM rooms WHERE room_type_id=? FOR UPDATE',
+      [roomType.id],
+    );
+    const usedLabels = new Set(existingRows.map(row => row.room_label));
+    const labels = [];
+    if (quantity === 1 && requestedLabel) labels.push(requestedLabel);
+    while (labels.length < quantity) {
+      let suffix = 1;
+      let label;
+      do {
+        label = `${roomType.house_type} ${suffix}`;
+        suffix += 1;
+      } while (usedLabels.has(label) || labels.includes(label));
+      labels.push(label);
+      usedLabels.add(label);
+    }
+    const values = labels.map(() => '(?,?)').join(',');
+    await connection.execute(
+      `INSERT INTO rooms (room_type_id, room_label) VALUES ${values}`,
+      labels.flatMap(roomLabel => [roomType.id, roomLabel]),
+    );
+    const placeholders = labels.map(() => '?').join(',');
+    const [createdRooms] = await connection.execute(
+      `SELECT id, room_type_id, room_label, status FROM rooms WHERE room_type_id=? AND room_label IN (${placeholders}) ORDER BY id ASC`,
+      [roomType.id, ...labels],
+    );
+    await connection.commit();
+    res.status(201).json({
+      message: `${createdRooms.length} room${createdRooms.length === 1 ? '' : 's'} created`,
+      rooms: createdRooms,
+    });
+  } catch (err) {
+    if (connection) await connection.rollback().catch(() => {});
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'room_label is already used in this room type' });
+    console.error('Create room error:', err);
+    res.status(500).json({ message: 'Unable to create room' });
+  } finally {
+    connection?.release();
+  }
+});
+
+app.patch('/api/rooms/:roomId', protect, authorize('landlord', 'admin'), async (req, res) => {
+  let connection;
+  try {
+    if (!req.is('application/json')) return res.status(415).json({ message: 'Room updates accept JSON only; room photos belong to the room type.' });
+    const room = await getOwnedRoom(req.params.roomId, req.user);
+    if (!room) return res.status(404).json({ message: 'Room not found or not yours' });
+    if (room.listing_type !== 'multi_room')
+      return res.status(400).json({ message: 'Rooms require a multi_room property' });
+
+    const hasLabel = Object.prototype.hasOwnProperty.call(req.body, 'room_label');
+    if (!hasLabel) return res.status(400).json({ message: 'room_label is required' });
+    const roomLabel = trimText(req.body.room_label, 100);
+    if (!roomLabel) return res.status(400).json({ message: 'room_label is required' });
+
+    connection = await db.getConnection();
+    await connection.beginTransaction();
+    await connection.execute('UPDATE rooms SET room_label=? WHERE id=?', [roomLabel, room.id]);
+    await connection.commit();
+    res.json({ message: 'Room updated' });
+  } catch (err) {
+    if (connection) await connection.rollback().catch(() => {});
+    if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ message: 'room_label is already used in this room type' });
+    console.error('Update room error:', err);
+    res.status(500).json({ message: 'Unable to update room' });
+  } finally {
+    connection?.release();
+  }
+});
+
+app.patch('/api/rooms/:roomId/status', protect, authorize('landlord', 'admin'), async (req, res) => {
+  try {
+    const room = await getOwnedRoom(req.params.roomId, req.user);
+    if (!room) return res.status(404).json({ message: 'Room not found or not yours' });
+    if (room.listing_type !== 'multi_room')
+      return res.status(400).json({ message: 'Rooms require a multi_room property' });
+    if (!ROOM_STATUSES.has(req.body.status))
+      return res.status(400).json({ message: 'status must be available or taken' });
+    await db.execute('UPDATE rooms SET status=? WHERE id=?', [req.body.status, room.id]);
+    res.json({ message: `Room marked ${req.body.status}`, status: req.body.status });
+  } catch (err) {
+    console.error('Room status error:', err);
+    res.status(500).json({ message: 'Unable to update room status' });
+  }
+});
+
+app.delete('/api/rooms/:roomId', protect, authorize('landlord', 'admin'), async (req, res) => {
+  try {
+    const room = await getOwnedRoom(req.params.roomId, req.user);
+    if (!room) return res.status(404).json({ message: 'Room not found or not yours' });
+    const [result] = await db.execute('DELETE FROM rooms WHERE id=?', [room.id]);
+    if (!result.affectedRows) return res.status(404).json({ message: 'Room not found or not yours' });
+    res.json({ message: 'Room deleted' });
+  } catch (err) {
+    console.error('Delete room error:', err);
+    res.status(500).json({ message: 'Unable to delete room' });
+  }
+});
+
 app.post('/api/payments/view', paymentLimiter, optionalAuth, async (req, res) => {
   const { property_id, phone, email, first_name, last_name, country_code = 'KE' } = req.body;
   if (!property_id || !phone || !email || !first_name || !last_name)
@@ -721,10 +1241,14 @@ app.post('/api/payments/view', paymentLimiter, optionalAuth, async (req, res) =>
 
 app.post('/api/landlord/properties/:id/payment', paymentLimiter, protect, authorize('landlord'), async (req, res) => {
   const { phone } = req.body;
-  if (!phone) return res.status(400).json({ message: 'phone is required' });
   try {
     const [[property]] = await db.execute('SELECT id, landlord_id, payment_status FROM properties WHERE id=? AND landlord_id=?', [req.params.id, req.user.id]);
     if (!property) return res.status(404).json({ message: 'Property not found' });
+    if (!PAYMENTS_ENABLED) {
+      await db.execute("UPDATE properties SET payment_status='paid' WHERE id=?", [property.id]);
+      return res.json({ paymentRequired: false, message: 'Payments are temporarily disabled; the listing is free.' });
+    }
+    if (!phone) return res.status(400).json({ message: 'phone is required' });
     if (property.payment_status === 'paid') return res.json({ paymentRequired: false, message: 'Property is already paid and published' });
     if (await activePlan(req.user.id)) {
       await db.execute("UPDATE properties SET payment_status='paid' WHERE id=?", [property.id]);
@@ -932,21 +1456,25 @@ app.get('/api/favorites', protect, async (req, res) => {
 app.post('/api/inquiries', async (req, res) => {
   const { property_id, user_name, user_email, message } = req.body;
   const accessToken = String(req.headers['x-view-access-token'] || '');
-  if (!property_id || !user_name || !user_email || !message || accessToken.length < 32)
+  if (!property_id || !user_name || !user_email || !message || (PAYMENTS_ENABLED && accessToken.length < 32))
     return res.status(400).json({ message: 'property_id, user_name, user_email, message, and a valid view access token are required' });
   try {
     const [[property]] = await db.execute('SELECT status FROM properties WHERE id=?', [property_id]);
     if (!property) return res.status(404).json({ message: 'Property not found' });
     if (property.status === 'taken') return res.status(409).json({ message: 'This house has been taken' });
-    const [payments] = await db.execute(
-      `SELECT id FROM payments WHERE type='view_fee' AND amount=? AND status='success' AND related_property_id=? AND view_access_token_hash=?
-       ORDER BY id DESC LIMIT 1`,
-       [VIEW_FEE_AMOUNT, property_id, tokenHash(accessToken)]
-    );
-    if (!payments.length) return res.status(402).json({ message: 'A successful KSh 40 view payment is required first' });
+    let paymentId = null;
+    if (PAYMENTS_ENABLED) {
+      const [payments] = await db.execute(
+        `SELECT id FROM payments WHERE type='view_fee' AND amount=? AND status='success' AND related_property_id=? AND view_access_token_hash=?
+         ORDER BY id DESC LIMIT 1`,
+         [VIEW_FEE_AMOUNT, property_id, tokenHash(accessToken)]
+      );
+      if (!payments.length) return res.status(402).json({ message: 'A successful view payment is required first' });
+      paymentId = payments[0].id;
+    }
     await db.execute(
       'INSERT INTO inquiries (property_id, user_name, user_email, message, payment_id) VALUES (?,?,?,?,?)',
-      [property_id, user_name.trim(), user_email.trim(), message.trim(), payments[0].id]
+      [property_id, user_name.trim(), user_email.trim(), message.trim(), paymentId]
     );
     res.status(201).json({ message: 'Inquiry sent successfully' });
   } catch (err) {

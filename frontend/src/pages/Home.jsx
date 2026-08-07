@@ -438,7 +438,7 @@ backgroundPosition: 'center',
                       {/* House type badge */}
                       <div style={{ position: 'absolute', top: 14, left: 14 }}>
                         <span style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)', color: 'white', padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600 }}>
-                          {house.house_type}
+                          {house.listing_type === 'multi_room' ? 'Multi-Room Building' : house.house_type}
                         </span>
                       </div>
                       {/* Payment cycle badge */}
@@ -463,6 +463,8 @@ backgroundPosition: 'center',
 
                       {/* Details row */}
                       <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
+                        {house.listing_type === 'multi_room' && <span style={{ fontSize: 12, color: '#6b7280' }}>Multiple room types available</span>}
+                        {house.listing_type !== 'multi_room' && <>
                         {house.bedrooms && (
                           <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#6b7280' }}>
                             🛏 {house.bedrooms} bed
@@ -473,6 +475,7 @@ backgroundPosition: 'center',
                             🚿 {house.bathrooms} bath
                           </span>
                         )}
+                        </>}
                       </div>
 
                       {amenities.length > 0 && (
@@ -493,12 +496,14 @@ backgroundPosition: 'center',
                       {/* Price + CTA */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <span style={{ fontSize: 20, fontWeight: 800, color: '#1a1a2e', fontFamily: "'Playfair Display', serif" }}>
-                            {formatPrice(house.price)}
-                          </span>
-                          <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>
-                            /{house.payment_cycle === 'semester' ? 'sem' : 'mo'}
-                          </span>
+                          {house.listing_type === 'multi_room' ? <span style={{ fontSize: 14, fontWeight: 700, color: '#1a1a2e' }}>Room prices inside</span> : <>
+                            <span style={{ fontSize: 20, fontWeight: 800, color: '#1a1a2e', fontFamily: "'Playfair Display', serif" }}>
+                              {formatPrice(house.price)}
+                            </span>
+                            <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 4 }}>
+                              /{house.payment_cycle === 'semester' ? 'sem' : 'mo'}
+                            </span>
+                          </>}
                         </div>
                         <div style={{
                           background: isHovered ? '#1a1a2e' : '#f3f4f6',

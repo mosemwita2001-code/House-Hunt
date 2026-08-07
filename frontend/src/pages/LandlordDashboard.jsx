@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
 import { optimizeImageUrl } from "../utils/imageUrl";
 import LoadingSpinner from "../components/LoadingSpinner";
+import MultiRoomManager from "../components/MultiRoomManager";
 import {
   LayoutDashboard, Home, PlusSquare, MessageSquare, User, LogOut,
   Menu, X, Bell, ChevronRight, Building2, MapPin, Bed, Bath,
@@ -134,7 +135,7 @@ function StatCard({ label, value, icon, color = "violet", loading }) {
 }
 
 // ─── Property card ────────────────────────────────────────────────────────────
-function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView, retryLoading, toggleLoading }) {
+function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView, onManageRooms, retryLoading, toggleLoading }) {
   const ss = property.status === "taken" ? STATUS_STYLE.inactive : STATUS_STYLE.active;
   return (
     <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, overflow: "hidden" }}>
@@ -144,7 +145,8 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView, r
         <span style={{ position: "absolute", top: 12, right: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...ss }}>
           {(property.status || "available").charAt(0).toUpperCase() + (property.status || "available").slice(1)}
         </span>
-        {property.payment_status !== "paid" && <span style={{ position: "absolute", top: 12, left: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...STATUS_STYLE.pending }}>Pending payment</span>}
+        {property.listing_type === "multi_room" && <span style={{ position: "absolute", top: 12, left: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, background: "rgba(124,58,237,0.9)", color: "white" }}>Multi-room building</span>}
+        {property.payments_enabled !== false && property.payment_status !== "paid" && <span style={{ position: "absolute", top: property.listing_type === "multi_room" ? 42 : 12, left: 12, fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 20, ...STATUS_STYLE.pending }}>Pending payment</span>}
       </div>
       <div style={{ padding: 16 }}>
         <h3 style={{ fontSize: 13, fontWeight: 600, color: "white", margin: "0 0 4px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{property.title}</h3>
@@ -155,18 +157,20 @@ function PropertyCard({ property, onEdit, onDelete, onToggle, onRetry, onView, r
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Bed size={12} />{property.bedrooms} bed</span>
           <span style={{ display: "flex", alignItems: "center", gap: 4 }}><Bath size={12} />{property.bathrooms} bath</span>
           <span style={{ marginLeft: "auto", fontSize: 13, fontWeight: 700, color: "#a78bfa" }}>
-            KSh {Number(property.price).toLocaleString()}
-            <span style={{ fontWeight: 400, color: "rgba(255,255,255,0.75)", fontSize: 11 }}>/{property.rentPeriod === "semester" ? "sem" : "mo"}</span>
+            {property.listing_type === "multi_room" ? "Multiple room types" : <>KSh {Number(property.price).toLocaleString()}<span style={{ fontWeight: 400, color: "rgba(255,255,255,0.75)", fontSize: 11 }}>/{property.rentPeriod === "semester" ? "sem" : "mo"}</span></>}
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {property.payment_status !== "paid" && <button disabled={retryLoading} aria-busy={retryLoading} onClick={() => onRetry(property)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: retryLoading ? "not-allowed" : "pointer", opacity: retryLoading ? 0.6 : 1 }}>{retryLoading && <LoadingSpinner size={12} />}{retryLoading ? "Starting..." : "Pay KSh 400"}</button>}
+          {property.payments_enabled !== false && property.payment_status !== "paid" && <button disabled={retryLoading} aria-busy={retryLoading} onClick={() => onRetry(property)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#fbbf24", cursor: retryLoading ? "not-allowed" : "pointer", opacity: retryLoading ? 0.6 : 1 }}>{retryLoading && <LoadingSpinner size={12} />}{retryLoading ? "Starting..." : "Complete payment"}</button>}
           <button disabled={toggleLoading} aria-busy={toggleLoading} onClick={() => onToggle(property)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, flex: 1, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#34d399", cursor: toggleLoading ? "not-allowed" : "pointer", opacity: toggleLoading ? 0.6 : 1 }}>
             {toggleLoading && <LoadingSpinner size={12} />}{toggleLoading ? "Updating..." : `Mark ${property.status === "taken" ? "Available" : "Taken"}`}
           </button>
           <button type="button" onClick={() => onView(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.8)", cursor: "pointer" }}>
             <Eye size={12} /> View
           </button>
+          {property.listing_type === "multi_room" && <button type="button" onClick={() => onManageRooms(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(14,165,233,0.1)", border: "1px solid rgba(14,165,233,0.2)", color: "#7dd3fc", cursor: "pointer" }}>
+            <Building2 size={12} /> Rooms
+          </button>}
           <button onClick={() => onEdit(property)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "8px 0", borderRadius: 10, fontSize: 11, fontWeight: 600, background: "rgba(124,58,237,0.12)", border: "1px solid rgba(124,58,237,0.2)", color: "#a78bfa", cursor: "pointer" }}>
             <Edit2 size={12} /> Edit
           </button>
@@ -257,7 +261,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
   const [form, setForm] = useState(() => ({
     title: "", price: "", deposit: "", county: "", town: "",
     house_type: "", bedrooms: 1, bathrooms: 1, description: "",
-    status: "available",
+    status: "available", listing_type: "single",
     ...initial,
     phoneNumber:  initial?.phone_number  || initial?.phoneNumber  || "",
     rentPeriod:   initial?.payment_cycle || initial?.rentPeriod   || "month",
@@ -277,6 +281,7 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
 
   // Stable setter — never causes child re-renders via new function references
   const set = useCallback((k, v) => setForm(p => ({ ...p, [k]: v })), []);
+  const isMultiRoom = form.listing_type === "multi_room";
   const toggleAmenity = useCallback((a) => setForm(p => ({
     ...p,
     amenities: p.amenities.includes(a) ? p.amenities.filter(x => x !== a) : [...p.amenities, a],
@@ -305,10 +310,10 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
   const validate = () => {
     const e = {};
     if (!form.title.trim())         e.title       = "Required";
-    if (!form.price || isNaN(+form.price)) e.price = "Valid price required";
+    if (!isMultiRoom && (!form.price || isNaN(+form.price))) e.price = "Valid price required";
     if (!form.county)               e.county      = "Required";
     if (!form.town.trim())          e.town        = "Required";
-    if (!form.house_type)           e.house_type  = "Required";
+    if (!isMultiRoom && !form.house_type) e.house_type = "Required";
     if (!form.description.trim())   e.description = "Required";
     if (!form.phoneNumber.trim())   e.phoneNumber = "Required";
     setErrors(e);
@@ -320,11 +325,12 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
     if (!validate()) return;
     const fd = new FormData();
     fd.append("title",         form.title);
-    fd.append("price",         form.price);
     fd.append("deposit",       form.deposit || 0);
     fd.append("county",        form.county);
     fd.append("town",          form.town);
-    fd.append("house_type",    form.house_type);
+    fd.append("house_type",    form.house_type || "Building");
+    fd.append("listing_type",  form.listing_type);
+    fd.append("price",         form.price || "1");
     fd.append("bedrooms",      form.bedrooms);
     fd.append("bathrooms",     form.bathrooms);
     fd.append("description",   form.description);
@@ -342,10 +348,22 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+        <legend style={{ display: "block", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.8)", marginBottom: 8 }}>What are you listing?</legend>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10 }}>
+          {[{ value: "single", title: "Single Property", text: "One rentable home or unit" }, { value: "multi_room", title: "Multi-Room Building", text: "A building with room types and individual rooms" }].map(option => (
+            <label key={option.value} style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: 12, borderRadius: 12, cursor: "pointer", border: `1px solid ${form.listing_type === option.value ? "rgba(124,58,237,0.65)" : "rgba(255,255,255,0.08)"}`, background: form.listing_type === option.value ? "rgba(124,58,237,0.14)" : "rgba(255,255,255,0.03)" }}>
+              <input type="radio" name="listing_type" value={option.value} checked={form.listing_type === option.value} onChange={event => set("listing_type", event.target.value)} style={{ marginTop: 2 }} />
+              <span><strong style={{ display: "block", color: "white", fontSize: 12 }}>{option.title}</strong><span style={{ display: "block", color: "rgba(255,255,255,0.68)", fontSize: 11, marginTop: 3 }}>{option.text}</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {isMultiRoom && <div style={{ padding: "10px 12px", borderRadius: 10, background: "rgba(14,165,233,0.08)", border: "1px solid rgba(14,165,233,0.18)", color: "rgba(255,255,255,0.78)", fontSize: 12 }}>Start with the building name, location, description, and exterior photos. You will add room types and rooms in the next step.</div>}
       {/* Image upload */}
       <div>
         <label htmlFor="property-images" style={{ display: "block", fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.72)", marginBottom: 8 }}>
-          Property Images <span style={{ color: "rgba(255,255,255,0.75)" }}>(up to 10)</span>
+          {isMultiRoom ? "Building Exterior Photos" : "Property Images"} <span style={{ color: "rgba(255,255,255,0.75)" }}>(up to 10)</span>
         </label>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
           {previews.map((src, i) => (
@@ -371,21 +389,21 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
       {/* Two-column grid */}
       <div className="landlord-form-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div style={{ gridColumn: "1 / -1" }}>
-        <Field id="property-title" label="Property Title *" error={errors.title}>
+        <Field id="property-title" label={`${isMultiRoom ? "Building Name" : "Property Title"} *`} error={errors.title}>
             <input style={inputStyle} value={form.title} onChange={e => set("title", e.target.value)}
-              onFocus={onFocus} onBlur={onBlur} placeholder="e.g. Modern 2BR in Kilimani" />
+              onFocus={onFocus} onBlur={onBlur} placeholder={isMultiRoom ? "e.g. Greenview Court" : "e.g. Modern 2BR in Kilimani"} />
           </Field>
         </div>
 
-        <Field id="property-price" label="Monthly Rent (KSh) *" error={errors.price}>
+        {!isMultiRoom && <Field id="property-price" label="Monthly Rent (KSh) *" error={errors.price}>
           <input style={inputStyle} type="number" value={form.price} onChange={e => set("price", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="25000" />
-        </Field>
+        </Field>}
 
-        <Field id="property-deposit" label="Deposit (KSh)">
+        {!isMultiRoom && <Field id="property-deposit" label="Deposit (KSh)">
           <input style={inputStyle} type="number" value={form.deposit} onChange={e => set("deposit", e.target.value)}
             onFocus={onFocus} onBlur={onBlur} placeholder="50000" />
-        </Field>
+        </Field>}
 
         <Field id="property-county" label="County *" error={errors.county}>
           <select style={sel} value={form.county} onChange={e => set("county", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
@@ -399,32 +417,32 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
             onFocus={onFocus} onBlur={onBlur} placeholder="e.g. Westlands" />
         </Field>
 
-        <Field id="property-house-type" label="House Type *" error={errors.house_type}>
+        {!isMultiRoom && <Field id="property-house-type" label="House Type *" error={errors.house_type}>
           <select style={sel} value={form.house_type} onChange={e => set("house_type", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="">Select type</option>
             {HOUSE_TYPES.map(h => <option key={h} value={h} style={{ background: "#1a1a2e" }}>{h}</option>)}
           </select>
-        </Field>
+        </Field>}
 
-        <Field id="property-status" label="Status">
+        {!isMultiRoom && <Field id="property-status" label="Status">
           <select style={sel} value={form.status} onChange={e => set("status", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="available" style={{ background: "#1a1a2e" }}>Available</option>
             <option value="taken"     style={{ background: "#1a1a2e" }}>Taken</option>
           </select>
-        </Field>
+        </Field>}
 
-        <Field id="property-bedrooms" label="Bedrooms">
+        {!isMultiRoom && <Field id="property-bedrooms" label="Bedrooms">
           <input style={inputStyle} type="number" min="0" max="20" value={form.bedrooms}
             onChange={e => set("bedrooms", e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-        </Field>
+        </Field>}
 
-        <Field id="property-bathrooms" label="Bathrooms">
+        {!isMultiRoom && <Field id="property-bathrooms" label="Bathrooms">
           <input style={inputStyle} type="number" min="0" max="20" value={form.bathrooms}
             onChange={e => set("bathrooms", e.target.value)} onFocus={onFocus} onBlur={onBlur} />
-        </Field>
+        </Field>}
 
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field id="property-description" label="Description *" error={errors.description}>
+          <Field id="property-description" label={`${isMultiRoom ? "Building Description" : "Description"} *`} error={errors.description}>
             <textarea style={{ ...inputStyle, resize: "none" }} rows={4} value={form.description}
               onChange={e => set("description", e.target.value)} onFocus={onFocus} onBlur={onBlur}
               placeholder="Describe the property in detail..." />
@@ -436,16 +454,16 @@ function PropertyForm({ initial, onSubmit, loading, onCancel, paymentOption = "l
             onFocus={onFocus} onBlur={onBlur} placeholder="+254712345678" />
           </Field>
 
-        <Field id="property-mpesa" label="M-Pesa Number (for listing payment)">
+        <Field id="property-mpesa" label="Additional Contact Number (optional)">
           <input style={inputStyle} value={form.mpesa_number || ""} onChange={e => set("mpesa_number", e.target.value)} onFocus={onFocus} onBlur={onBlur} placeholder="0712345678" />
         </Field>
 
-        <Field id="property-rent-period" label="Rent Period">
+        {!isMultiRoom && <Field id="property-rent-period" label="Rent Period">
           <select style={sel} value={form.rentPeriod} onChange={e => set("rentPeriod", e.target.value)} onFocus={onFocus} onBlur={onBlur}>
             <option value="month"    style={{ background: "#1a1a2e" }}>Per Month</option>
             <option value="semester" style={{ background: "#1a1a2e" }}>Per Semester</option>
           </select>
-        </Field>
+        </Field>}
       </div>
 
       {/* Amenities */}
@@ -586,6 +604,7 @@ function MyProperties({ addToast, onNavigate }) {
   const [deleteModal,  setDeleteModal]  = useState({ open: false, id: null });
   const [deleting,     setDeleting]     = useState(false);
   const [editTarget,   setEditTarget]   = useState(null);
+  const [roomTarget,   setRoomTarget]   = useState(null);
   const [saving,       setSaving]       = useState(false);
   const [toggleLoading, setToggleLoading] = useState(null);
   const [retryLoading, setRetryLoading] = useState(false);
@@ -672,6 +691,15 @@ function MyProperties({ addToast, onNavigate }) {
     finally { setRetryLoading(false); }
   };
 
+  if (roomTarget) return (
+    <MultiRoomManager
+      propertyId={roomTarget.id}
+      propertyTitle={roomTarget.title}
+      addToast={addToast}
+      onDone={() => { setRoomTarget(null); loadProperties(page); }}
+    />
+  );
+
   // Edit view
   if (editTarget) return (
     <div style={{ maxWidth: 700 }}>
@@ -738,7 +766,7 @@ function MyProperties({ addToast, onNavigate }) {
       ) : (
         <div className="landlord-property-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14 }}>
           {filtered.map(p => (
-            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} retryLoading={retryLoading && retryPayment.property?.id === p.id} toggleLoading={toggleLoading === p.id} onView={property => { window.location.href = `/property/${property.id}`; }} />
+            <PropertyCard key={p.id} property={p} onEdit={setEditTarget} onDelete={id => setDeleteModal({ open: true, id })} onToggle={handleToggle} onRetry={handleRetry} retryLoading={retryLoading && retryPayment.property?.id === p.id} toggleLoading={toggleLoading === p.id} onManageRooms={setRoomTarget} onView={property => { window.location.href = `/property/${property.id}`; }} />
           ))}
         </div>
       )}
@@ -766,14 +794,28 @@ function MyProperties({ addToast, onNavigate }) {
 // ─── Add Property page ────────────────────────────────────────────────────────
 function AddProperty({ addToast, onNavigate }) {
   const [loading, setLoading] = useState(false);
-  const [paymentOption, setPaymentOption] = useState("listing");
   const [pendingPayment, setPendingPayment] = useState(null);
+  const [multiRoomBuilding, setMultiRoomBuilding] = useState(null);
   const [planLoading, setPlanLoading] = useState("");
 
   const handleSubmit = async (fd, formValues) => {
     setLoading(true);
     try {
       const { data } = await API.post("/landlord/properties", fd);
+      if (formValues.listing_type === "multi_room" && data.id) {
+        if (data.paymentRequired === true) {
+          setPendingPayment({
+            propertyId: data.id,
+            payment: data.payment,
+            phone: formValues.mpesa_number || formValues.phoneNumber,
+          });
+          addToast("Building submitted for admin approval. Add room types and rooms below.", "success");
+        } else {
+          addToast(data.paymentsEnabled === false ? "Building submitted for admin approval. Add room types and rooms below." : "Building created. Add room types and rooms below.", "success");
+        }
+        setMultiRoomBuilding({ id: data.id, title: formValues.title });
+        return;
+      }
       if (data.paymentRequired === true) {
         setPendingPayment({
           propertyId: data.id,
@@ -783,7 +825,7 @@ function AddProperty({ addToast, onNavigate }) {
         addToast("Payment required to publish this listing.", "warning");
         return;
       }
-      addToast("Property listed successfully!", "success");
+      addToast(data.paymentsEnabled === false ? "Property submitted for admin approval." : "Property listed successfully!", "success");
       onNavigate("properties");
     } catch (err) {
       addToast(err.response?.data?.message || "Could not save property", "error");
@@ -819,7 +861,17 @@ function AddProperty({ addToast, onNavigate }) {
         </div>
       </div>
       <div style={{ background: "#0f0f23", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 20, padding: 24 }}>
-        {pendingPayment ? (
+        {multiRoomBuilding ? (
+          <MultiRoomManager
+            propertyId={multiRoomBuilding.id}
+            propertyTitle={multiRoomBuilding.title}
+            addToast={addToast}
+            pendingPayment={pendingPayment}
+            paymentLoading={Boolean(planLoading)}
+            onContinuePayment={() => { if (pendingPayment.payment?.redirect_url) window.location.href = pendingPayment.payment.redirect_url; }}
+            onDone={() => { setMultiRoomBuilding(null); setPendingPayment(null); onNavigate("properties"); }}
+          />
+        ) : pendingPayment ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <h2 style={{ margin: 0, color: "white", fontSize: 16 }}>Payment required to publish this listing</h2>
@@ -832,8 +884,8 @@ function AddProperty({ addToast, onNavigate }) {
               <button onClick={() => onNavigate("properties")} style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.14)", background: "transparent", color: "rgba(255,255,255,0.7)", cursor: "pointer" }}>View pending listing</button>
             </div>
           </div>
-        ) : <><PaymentOptions value={paymentOption} onChange={setPaymentOption} />
-          <PropertyForm onSubmit={handleSubmit} loading={loading} paymentOption={paymentOption} /></>}
+        ) : <><FreeListingNotice />
+          <PropertyForm onSubmit={handleSubmit} loading={loading} /></>}
       </div>
     </div>
   );
@@ -1196,17 +1248,12 @@ export default function LandlordDashboard() {
   );
 }
 
-function PaymentOptions({ value, onChange }) {
-  const options = [
-    { id: "monthly", title: "Monthly subscription", price: "KSh 1,000/month", note: "Covers all listings for 30 days" },
-    { id: "semester", title: "Semester subscription", price: "KSh 3,000/semester", note: "Covers all listings for 120 days" },
-    { id: "listing", title: "Pay-per-listing", price: "KSh 400 per saved property listing", note: "One-time payment; no subscription" },
-  ];
+function FreeListingNotice({ value, onChange } = {}) {
   return <section style={{ marginBottom: 22, padding: 16, borderRadius: 14, background: "rgba(124,58,237,0.1)", border: "1px solid rgba(124,58,237,0.2)" }}>
-    <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Choose how to pay</h2>
-    <p style={{ margin: "0 0 12px", color: "rgba(255,255,255,0.8)", fontSize: 12 }}>Payment starts after the listing details are saved. A confirmed subscription records its expiry automatically.</p>
+    <h2 style={{ margin: "0 0 4px", color: "white", fontSize: 14 }}>Free listing</h2>
+    <p style={{ margin: "0 0 12px", color: "rgba(255,255,255,0.8)", fontSize: 12 }}>No payment is required. Your listing will be submitted for admin approval after you save it.</p>
     <div style={{ display: "grid", gap: 8 }}>
-      {options.map(option => <label key={option.id} style={{ display: "flex", gap: 10, cursor: "pointer", padding: 12, borderRadius: 10, border: `1px solid ${value === option.id ? "#a78bfa" : "rgba(255,255,255,0.12)"}`, background: value === option.id ? "rgba(124,58,237,0.18)" : "rgba(0,0,0,0.12)" }}>
+      {[].map(option => <label key={option.id} style={{ display: "flex", gap: 10, cursor: "pointer", padding: 12, borderRadius: 10, border: `1px solid ${value === option.id ? "#a78bfa" : "rgba(255,255,255,0.12)"}`, background: value === option.id ? "rgba(124,58,237,0.18)" : "rgba(0,0,0,0.12)" }}>
         <input type="radio" name="listing-payment" value={option.id} checked={value === option.id} onChange={() => onChange(option.id)} />
         <span><strong style={{ color: "white", fontSize: 13 }}>{option.title} — {option.price}</strong><small style={{ display: "block", color: "rgba(255,255,255,0.8)", marginTop: 3 }}>{option.note}</small></span>
       </label>)}

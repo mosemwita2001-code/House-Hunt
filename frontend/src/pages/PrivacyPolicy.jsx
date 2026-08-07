@@ -64,7 +64,7 @@ export default function PrivacyPolicy() {
             <h2 className="mb-4 mt-10 text-xl font-bold text-slate-900">3. How We Share Your Information</h2>
             <p>We only share your information where necessary to operate the Platform, including with:</p>
             <ul className="mt-3 list-disc space-y-2 pl-6">
-              <li>Payment partners, to process payments for listing fees and property detail access.</li>
+              <li>Payment partners, to process optional or future paid services when enabled.</li>
               <li>Cloud image hosting providers, to store and deliver property photographs.</li>
               <li>Other users, where sharing is a necessary part of the service  for example, when you unlock a property's detailed information, your enquiry and relevant contact details may be shared with the landlord of that property, and vice versa.</li>
               <li>Regulators, law enforcement, or courts, where we are required to disclose information by Kenyan law, or where disclosure is necessary to protect the rights, property, or safety of Keja Hunt, our users, or the public.</li>
